@@ -1,0 +1,18 @@
+# Python dependencies for e-ink display management
+# Install with: pip install -r requirements.txt
+
+# Image processing
+Pillow>=10.0.0
+
+# System information for performance optimization
+psutil>=5.9.0
+
+# SPI interface for Raspberry Pi (if using real hardware)
+spidev>=3.5
+
+# RPi.GPIO for Raspberry Pi GPIO control (if using real hardware)
+RPi.GPIO>=0.7.1
+
+# For development/testing on non-Raspberry Pi systems, 
+# the above hardware-specific packages will be optional
+# and the mock display will be used instead
