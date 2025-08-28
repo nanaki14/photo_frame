@@ -68,10 +68,12 @@ app.use(
 		index: 'index.html',
 		rewriteRequestPath: (path) => {
 			// Serve index.html for non-API routes, but not for static assets
-			if (!path.startsWith('/api') && 
-				!path.startsWith('/uploads') && 
-				!path.includes('.') && 
-				path !== '/') {
+			if (
+				!path.startsWith('/api') &&
+				!path.startsWith('/uploads') &&
+				!path.includes('.') &&
+				path !== '/'
+			) {
 				return '/index.html';
 			}
 			return path;
@@ -122,7 +124,7 @@ app.post('/api/photo', async (c) => {
 		// Convert File to Buffer
 		const buffer = Buffer.from(await file.arrayBuffer());
 
-		// Process image with Sharp (resize and optimize for e-ink display)
+		// Process image with Sharp (resize and optimize for Waveshare 7.3inch e-ink color display)
 		// Use streaming approach for better memory efficiency on Pi
 		const sharpInstance = sharp(buffer, {
 			// Limit memory usage for Pi Zero 2 WH
@@ -137,10 +139,17 @@ app.post('/api/photo', async (c) => {
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
 			})
-			.greyscale()
+			// Optimize for e-ink color display characteristics
+			// E-ink displays benefit from higher contrast and slightly reduced saturation
+			.modulate({
+				brightness: 1.1, // Higher brightness for e-ink visibility
+				saturation: 0.9, // Slightly reduce saturation for better e-ink color reproduction
+			})
+			// Apply slight sharpening for better e-ink clarity
+			.sharpen(1.0, 0.5, 0.5)
 			.jpeg({
-				quality: isPi ? 85 : 90, // Slightly lower quality for faster processing
-				progressive: false, // Disable progressive for faster encode
+				quality: isPi ? 90 : 95, // Higher quality for e-ink color accuracy
+				progressive: false, // Disable progressive for e-ink displays
 				optimiseScans: false, // Disable optimization for faster processing
 			})
 			.toBuffer();

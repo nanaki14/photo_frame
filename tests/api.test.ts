@@ -1,11 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { apiClient } from '../src/lib/api';
 
 // Mock server setup for testing
-const mockServer = {
-	port: 3001,
-	url: `http://localhost:3001`,
-};
+// const mockServer = {
+// 	port: 3001,
+// 	url: `http://localhost:3001`,
+// };
 
 describe('API Client Tests', () => {
 	describe('Photo Upload API', () => {

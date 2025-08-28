@@ -10,13 +10,13 @@ interface ImageProcessingConfig {
 const defaultConfig: ImageProcessingConfig = {
 	targetWidth: 800, // Waveshare 7.3inch e-ink display width
 	targetHeight: 480, // Waveshare 7.3inch e-ink display height
-	quality: 90, // JPEG quality for processed images
+	quality: 95, // High quality for e-ink color accuracy
 };
 
 let currentConfig = { ...defaultConfig };
 
 /**
- * Process uploaded image for e-ink display optimization
+ * Process uploaded image for Waveshare 7.3inch e-ink color display optimization
  */
 export async function processImage(file: File): Promise<{
 	buffer: Buffer;
@@ -32,17 +32,23 @@ export async function processImage(file: File): Promise<{
 		const arrayBuffer = await file.arrayBuffer();
 		const inputBuffer = Buffer.from(arrayBuffer);
 
-		// Process image with Sharp
+		// Process image with Sharp for Waveshare 7.3inch e-ink color display
 		const processedImage = sharp(inputBuffer)
 			.resize(currentConfig.targetWidth, currentConfig.targetHeight, {
 				fit: 'inside', // Maintain aspect ratio
 				withoutEnlargement: true, // Don't enlarge smaller images
 				background: { r: 255, g: 255, b: 255, alpha: 1 }, // White background
 			})
-			.grayscale() // Convert to grayscale for e-ink
+			// Optimize for e-ink color display characteristics
+			.modulate({
+				brightness: 1.1, // Higher brightness for e-ink visibility
+				saturation: 0.9, // Slightly reduce saturation for better e-ink reproduction
+			})
+			// Apply sharpening for better e-ink clarity
+			.sharpen(1.0, 0.5, 0.5)
 			.jpeg({
 				quality: currentConfig.quality,
-				progressive: false, // Better for e-ink displays
+				progressive: false, // Disable progressive for e-ink
 				mozjpeg: true, // Better compression
 			});
 
@@ -94,28 +100,31 @@ export async function createThumbnail(
 }
 
 /**
- * Optimize image specifically for e-ink display characteristics
+ * Optimize image for Waveshare 7.3inch e-ink color display characteristics
  */
-export async function optimizeForEInk(buffer: Buffer): Promise<Buffer> {
+export async function optimizeForEInkColorDisplay(
+	buffer: Buffer,
+): Promise<Buffer> {
 	try {
-		// E-ink specific optimizations
+		// E-ink color display optimizations
 		const optimized = await sharp(buffer)
-			// Increase contrast for better e-ink visibility
-			.linear(1.2, -(128 * 1.2) + 128)
-			// Apply slight sharpening
-			.sharpen(1, 1, 0.5)
-			// Ensure white background
-			.flatten({ background: { r: 255, g: 255, b: 255 } })
+			// Enhance contrast and reduce saturation for e-ink
+			.modulate({
+				brightness: 1.1, // Higher brightness for e-ink visibility
+				saturation: 0.9, // Slightly reduce saturation for better e-ink reproduction
+			})
+			// Apply sharpening for better e-ink clarity
+			.sharpen(1.0, 0.5, 0.5)
 			.jpeg({
 				quality: 95,
-				progressive: false,
+				progressive: false, // E-ink displays don't benefit from progressive
 			})
 			.toBuffer();
 
 		return optimized;
 	} catch (error) {
-		console.error('Error optimizing for e-ink:', error);
-		throw new Error('Failed to optimize image for e-ink display');
+		console.error('Error optimizing for e-ink color display:', error);
+		throw new Error('Failed to optimize image for e-ink color display');
 	}
 }
 
