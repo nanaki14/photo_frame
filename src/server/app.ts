@@ -51,12 +51,31 @@ async function ensureUploadDir() {
 // Initialize upload directory
 ensureUploadDir();
 
-// Static file serving
+// Static file serving for uploads
 app.use(
 	'/uploads/*',
 	serveStatic({
 		root: './',
 		rewriteRequestPath: (path) => path,
+	}),
+);
+
+// Static file serving for React app (built version)
+app.use(
+	'/*',
+	serveStatic({
+		root: './src/dist',
+		index: 'index.html',
+		rewriteRequestPath: (path) => {
+			// Serve index.html for non-API routes, but not for static assets
+			if (!path.startsWith('/api') && 
+				!path.startsWith('/uploads') && 
+				!path.includes('.') && 
+				path !== '/') {
+				return '/index.html';
+			}
+			return path;
+		},
 	}),
 );
 

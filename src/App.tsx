@@ -83,63 +83,6 @@ function MainApp() {
 						</div>
 					</CardContent>
 				</Card>
-
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="font-medium text-sm">Battery</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="space-y-2">
-							<div className="flex items-center justify-between">
-								<span className="text-gray-600 text-sm">Level:</span>
-								<span className="font-medium text-sm">
-									{systemStatus?.battery.level ?? 0}%
-								</span>
-							</div>
-							<div className="h-2 w-full rounded-full bg-gray-200">
-								<div
-									className={`h-2 rounded-full ${
-										(systemStatus?.battery.level ?? 0) > 20
-											? 'bg-green-500'
-											: 'bg-red-500'
-									}`}
-									style={{ width: `${systemStatus?.battery.level ?? 0}%` }}
-								/>
-							</div>
-							{systemStatus?.battery.charging && (
-								<div className="text-blue-600 text-xs">Charging</div>
-							)}
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="font-medium text-sm">Storage</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="space-y-2">
-							<div className="flex items-center justify-between">
-								<span className="text-gray-600 text-sm">Used:</span>
-								<span className="font-medium text-sm">
-									{systemStatus
-										? `${Math.round(systemStatus.storage.used / (1024 * 1024))}MB`
-										: '0MB'}
-								</span>
-							</div>
-							<div className="h-2 w-full rounded-full bg-gray-200">
-								<div
-									className="h-2 rounded-full bg-blue-500"
-									style={{
-										width: systemStatus
-											? `${Math.min(100, (systemStatus.storage.used / systemStatus.storage.total) * 100)}%`
-											: '0%',
-									}}
-								/>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
 			</div>
 
 			<div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

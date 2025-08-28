@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { type BuildConfig, build } from 'bun';
 import plugin from 'bun-plugin-tailwind';
-import { existsSync } from 'fs';
+import { existsSync, watch } from 'fs';
 import { rm } from 'fs/promises';
 import path from 'path';
 
@@ -124,51 +124,94 @@ const formatFileSize = (bytes: number): string => {
 	return `${size.toFixed(2)} ${units[unitIndex]}`;
 };
 
+// Main build function
+async function runBuild(config: Partial<BuildConfig>, outdir: string, clean = true) {
+	if (clean && existsSync(outdir)) {
+		console.log(`🗑️ Cleaning previous build at ${outdir}`);
+		await rm(outdir, { recursive: true, force: true });
+	}
+
+	const start = performance.now();
+
+	// Scan for all HTML files in the project
+	const entrypoints = [...new Bun.Glob('**.html').scanSync('src')]
+		.map((a) => path.resolve('src', a))
+		.filter((dir) => !dir.includes('node_modules'));
+
+	if (entrypoints.length === 0) {
+		console.log('📄 No HTML files found to process');
+		return;
+	}
+
+	console.log(
+		`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 'file' : 'files'} to process`,
+	);
+
+	// Build all the HTML files
+	const result = await build({
+		entrypoints,
+		outdir,
+		plugins: [plugin],
+		minify: config.minify !== false,
+		target: 'browser',
+		sourcemap: config.sourcemap || 'linked',
+		define: {
+			'process.env.NODE_ENV': JSON.stringify(config.minify !== false ? 'production' : 'development'),
+		},
+		...config, // Merge in any CLI-provided options
+	});
+
+	// Print the results
+	const end = performance.now();
+	const buildTime = (end - start).toFixed(2);
+
+	const outputTable = result.outputs.map((output) => ({
+		File: path.relative(process.cwd(), output.path),
+		Type: output.kind,
+		Size: formatFileSize(output.size),
+	}));
+
+	console.table(outputTable);
+	console.log(`✅ Build completed in ${buildTime}ms\n`);
+}
+
 console.log('\n🚀 Starting build process...\n');
 
 // Parse CLI arguments with our magical parser
 const cliConfig = parseArgs();
 const outdir = cliConfig.outdir || path.join(process.cwd(), 'dist');
+const watchMode = cliConfig.watch || false;
 
-if (existsSync(outdir)) {
-	console.log(`🗑️ Cleaning previous build at ${outdir}`);
-	await rm(outdir, { recursive: true, force: true });
+// Initial build
+await runBuild(cliConfig, outdir, true);
+
+// Watch mode
+if (watchMode) {
+	console.log('👀 Watching for changes...\n');
+	
+	let timeout: NodeJS.Timeout;
+	const debounce = (fn: Function, delay: number) => {
+		return (...args: any[]) => {
+			clearTimeout(timeout);
+			timeout = setTimeout(() => fn(...args), delay);
+		};
+	};
+
+	const debouncedBuild = debounce(async () => {
+		console.log('🔄 Files changed, rebuilding...');
+		await runBuild(cliConfig, outdir, false);
+	}, 300);
+
+	// Watch src directory
+	watch('./src', { recursive: true }, (eventType, filename) => {
+		if (filename && (filename.endsWith('.tsx') || filename.endsWith('.ts') || filename.endsWith('.css') || filename.endsWith('.html'))) {
+			debouncedBuild();
+		}
+	});
+
+	// Keep process alive
+	process.on('SIGINT', () => {
+		console.log('\n👋 Stopping watch mode...');
+		process.exit(0);
+	});
 }
-
-const start = performance.now();
-
-// Scan for all HTML files in the project
-const entrypoints = [...new Bun.Glob('**.html').scanSync('src')]
-	.map((a) => path.resolve('src', a))
-	.filter((dir) => !dir.includes('node_modules'));
-console.log(
-	`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 'file' : 'files'} to process\n`,
-);
-
-// Build all the HTML files
-const result = await build({
-	entrypoints,
-	outdir,
-	plugins: [plugin],
-	minify: true,
-	target: 'browser',
-	sourcemap: 'linked',
-	define: {
-		'process.env.NODE_ENV': JSON.stringify('production'),
-	},
-	...cliConfig, // Merge in any CLI-provided options
-});
-
-// Print the results
-const end = performance.now();
-
-const outputTable = result.outputs.map((output) => ({
-	File: path.relative(process.cwd(), output.path),
-	Type: output.kind,
-	Size: formatFileSize(output.size),
-}));
-
-console.table(outputTable);
-const buildTime = (end - start).toFixed(2);
-
-console.log(`\n✅ Build completed in ${buildTime}ms\n`);

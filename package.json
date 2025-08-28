@@ -6,7 +6,8 @@
 	"main": "src/index.tsx",
 	"module": "src/index.tsx",
 	"scripts": {
-		"dev": "bun --hot src/index.tsx",
+		"dev": "concurrently \"bun run build:dev --watch\" \"bun --hot src/index.tsx\"",
+		"build:dev": "bun run build.ts --outdir=src/dist --no-minify --source-map=inline",
 		"start": "NODE_ENV=production bun src/index.tsx",
 		"build": "bun run build.ts",
 		"install-pi": "./install.sh",
@@ -44,6 +45,7 @@
 		"@types/bun": "latest",
 		"@types/node": "^24.3.0",
 		"@types/react": "^19.1.11",
-		"@types/react-dom": "^19.1.7"
+		"@types/react-dom": "^19.1.7",
+		"concurrently": "^9.2.1"
 	}
 }
