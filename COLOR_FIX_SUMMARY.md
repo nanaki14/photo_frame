@@ -5,8 +5,10 @@ The photo frame was displaying colors with artifacts:
 - **Green areas appearing as red-black** instead of vibrant green
 - **People/skin tones appearing as white voids** instead of natural colors
 
-## Root Cause
-The enhancement pipeline was using **excessive saturation boost (2.5x)**, which was destroying color balance in non-primary colors:
+## Root Causes (Two Issues Found)
+
+### Issue 1: Excessive Saturation Boost (2.5x)
+The enhancement pipeline was destroying color balance in non-primary colors:
 
 ```
 Original skin tone RGB(255, 200, 124) + 2.5x saturation → RGB(255, 188, 0)
@@ -15,8 +17,14 @@ After contrast boost → RGB(255, 188, 0) + brightness → RGB(255, 206, 0)
 
 This extreme shift caused skin tones to map to yellow/red color range with unnatural intensity, making people appear as white voids on the 6-color e-ink display.
 
+### Issue 2: Incorrect Green Color Value
+The core color palette used `(0, 255, 0)` for green, but official Waveshare specifications define it as `(0, 128, 0)`, which is darker and better matches the actual e-ink display capabilities.
+
 ## Solution
-Reduced saturation enhancement from **2.5x to 1.5x** to preserve color balance:
+Two changes were made:
+
+### Fix 1: Reduce Saturation Enhancement (2.5x → 1.5x)
+Preserve color balance while maintaining enhancement:
 
 ```
 Original skin tone RGB(255, 200, 124) + 1.5x saturation → RGB(255, 196, 82)
@@ -24,26 +32,33 @@ After contrast boost → RGB(255, 192, 0) + brightness → RGB(255, 211, 0)
 Maps to Yellow - natural appearance for skin tones ✓
 ```
 
+### Fix 2: Correct Green Color Value (0, 255, 0) → (0, 128, 0)
+Use official Waveshare color definition for better color accuracy on the actual hardware.
+
 ## Changes Made
 
 ### File: `display/display_manager.py`
 
-**Before:**
+**Change 1: Saturation Enhancement**
 ```python
-enhancer = ImageEnhance.Color(background)
+# Before
 background = enhancer.enhance(2.5)  # 250% saturation (maximum boost)
-logger.info("Color saturation enhanced by 250%")
-```
 
-**After:**
-```python
-enhancer = ImageEnhance.Color(background)
+# After
 background = enhancer.enhance(1.5)  # 150% saturation (moderate boost)
-logger.info("Color saturation enhanced by 150%")
 ```
 
-### Removed Redundant Code
-Also simplified `display_image()` method by removing redundant palette quantization that was conflicting with the 6-color mapping already done in `optimize_image_for_eink()`.
+**Change 2: Green Color Value**
+```python
+# Before
+core_colors = [(0, 255, 0)]  # Bright green
+
+# After
+core_colors = [(0, 128, 0)]  # Official Waveshare green
+```
+
+### Additional Code Cleanup
+Simplified `display_image()` method by removing redundant palette quantization that was conflicting with the 6-color mapping already done in `optimize_image_for_eink()`.
 
 ## Test Results
 
@@ -90,13 +105,13 @@ After deploying this fix, you should see:
 
 ## Technical Details
 
-### E-Ink Spectra 6 Color Palette
+### E-Ink Spectra 6 Color Palette (Official Waveshare Definition)
 The display supports 6 colors:
 - Black (0, 0, 0)
 - White (255, 255, 255)
 - Red (255, 0, 0)
 - Yellow (255, 255, 0)
-- Green (0, 255, 0)
+- Green (0, 128, 0) ← Official value (not 0, 255, 0)
 - Blue (0, 0, 255)
 
 ### Color Mapping Algorithm

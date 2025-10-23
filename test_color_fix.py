@@ -24,13 +24,13 @@ except ImportError:
     print("Warning: Could not import DisplayManager, will use PIL only")
     DisplayManager = None
 
-# Color definitions
+# Color definitions - per Waveshare official specifications
 CORE_COLORS = [
     (0, 0, 0),          # Black
     (255, 255, 255),    # White
     (255, 0, 0),        # Red
     (255, 255, 0),      # Yellow
-    (0, 255, 0),        # Green
+    (0, 128, 0),        # Green - Official Waveshare value
     (0, 0, 255),        # Blue
 ]
 

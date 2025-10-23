@@ -285,13 +285,14 @@ class DisplayManager:
             # Use direct color mapping to the 6 core colors instead
             logger.info("Step 2: Applying direct 6-color mapping")
 
-            # E Ink Spectra 6 core colors - CORRECTED to official values from epd7in3f.py
+            # E Ink Spectra 6 core colors - per Waveshare HAT (E) specifications
+            # Reference: Official Waveshare quantization example
             core_colors = [
                 (0, 0, 0),          # Black
                 (255, 255, 255),    # White
                 (255, 0, 0),        # Red
                 (255, 255, 0),      # Yellow
-                (0, 255, 0),        # Green - FIXED: was (0, 128, 0), now pure green!
+                (0, 128, 0),        # Green - Official Waveshare value
                 (0, 0, 255),        # Blue
             ]
 
