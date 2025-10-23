@@ -260,11 +260,12 @@ class DisplayManager:
 
             from PIL import ImageEnhance
 
-            # Enhance saturation AGGRESSIVELY to compensate for 6-color limitation
-            # Start with maximum saturation boost
+            # Enhance saturation moderately to compensate for 6-color limitation
+            # Note: Excessive saturation destroys skin tones and natural colors
+            # 2.5x was causing skin tones to become red-black artifacts
             enhancer = ImageEnhance.Color(background)
-            background = enhancer.enhance(2.5)  # 250% saturation (maximum boost)
-            logger.info("Color saturation enhanced by 250%")
+            background = enhancer.enhance(1.5)  # 150% saturation (moderate boost)
+            logger.info("Color saturation enhanced by 150%")
             background.save("/tmp/02_after_saturation.png")
 
             # Enhance contrast to separate colors
@@ -409,57 +410,16 @@ class DisplayManager:
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
 
-            # Use official Waveshare approach: palette quantization
-            # Now with CORRECT color values from official epd7in3f.py
-            logger.info("Applying palette quantization with official colors...")
-
-            # Define official 6 core colors (exact RGB values from epd7in3f.py)
-            official_colors = [
-                (0, 0, 0),          # Black
-                (255, 255, 255),    # White
-                (255, 0, 0),        # Red
-                (255, 255, 0),      # Yellow
-                (0, 255, 0),        # Green (FIXED: was 0, 128, 0)
-                (0, 0, 255),        # Blue
-            ]
-
-            # Create palette image with official colors
-            palette_image = Image.new('P', (1, 1))
-            palette_data = []
-
-            for color in official_colors:
-                palette_data.extend(color)
-
-            # Pad palette to 256 colors (768 bytes for 3 bytes per color)
-            while len(palette_data) < 768:
-                palette_data.append(0)
-
-            palette_image.putpalette(palette_data)
-
-            # Quantize the image using official palette with Floyd-Steinberg dithering
-            logger.info("Quantizing image to official 6-color palette...")
-            try:
-                quantized = display_image.quantize(
-                    palette=palette_image,
-                    dither=Image.FLOYDSTEINBERG
-                )
-                final_image = quantized.convert('RGB')
-                logger.info("Palette quantization successful")
-            except Exception as e:
-                logger.error(f"Palette quantization failed: {e}, using original image")
-                final_image = display_image
-
-            # Save diagnostic
-            final_image.save("/tmp/08_after_official_quantize.png")
-            logger.info("Saved diagnostic: /tmp/08_after_official_quantize.png")
+            # The image is already 6-color mapped in optimize_image_for_eink()
+            # Just use official getbuffer() to convert to hardware buffer format
+            logger.info("Using official getbuffer() on pre-mapped image...")
 
             # Record start time for performance monitoring
             start_time = time.time()
 
             # Use official getbuffer() method
-            logger.info("Using official getbuffer()...")
-            buffer = self.epd.getbuffer(final_image)
-            logger.info(f"Buffer created: {len(buffer)} bytes")
+            buffer = self.epd.getbuffer(display_image)
+            logger.info(f"Buffer created by getbuffer(): {len(buffer)} bytes")
 
             self.epd.display(buffer)
 
