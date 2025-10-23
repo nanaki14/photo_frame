@@ -21,15 +21,35 @@ install_dependencies() {
     sudo apt install -y git python3-pip curl
 }
 
-# Install Node.js runtime (choose one)
+# Install Node.js runtime (Bun preferred, Node.js fallback)
 install_runtime() {
     log "Installing JavaScript runtime..."
+
+    # Check if Bun is already installed
     if command -v bun &>/dev/null; then
-        log "Bun already installed"
-    elif command -v node &>/dev/null; then
-        log "Node.js already installed"
+        log "Bun already installed at $(which bun)"
+        return
+    fi
+
+    # Check if Node.js is already installed
+    if command -v node &>/dev/null; then
+        log "Node.js already installed at $(which node)"
+        return
+    fi
+
+    # Install Bun from official script
+    log "Installing Bun runtime..."
+    curl -fsSL https://bun.sh/install | bash
+
+    # Update PATH for current session
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+
+    # Verify Bun installation
+    if command -v bun &>/dev/null; then
+        log "Bun installed successfully at $(which bun)"
     else
-        warn "Installing Node.js (fallback)..."
+        warn "Bun installation failed, falling back to Node.js..."
         sudo apt install -y nodejs npm
     fi
 }
@@ -77,20 +97,28 @@ setup_directories() {
 create_service() {
     log "Setting up systemd service..."
 
-    local cmd
+    local runtime_cmd
+    local runtime_path
     local venv_activate=""
 
-    # Determine runtime and set command
+    # Determine which runtime to use
     if command -v bun &>/dev/null; then
-        cmd="bun start"
+        runtime_path=$(which bun)
+        runtime_cmd="bun start"
+    elif command -v node &>/dev/null; then
+        runtime_path=$(which node)
+        runtime_cmd="npm start"
     else
-        cmd="npm start"
+        error "Neither Bun nor Node.js found. Please run install_runtime() first."
     fi
 
     # If venv was created, activate it in the service
     if [ -d "venv" ]; then
         venv_activate="source venv/bin/activate && "
     fi
+
+    log "Using runtime: $runtime_path"
+    log "Command: ${venv_activate}${runtime_cmd}"
 
     sudo tee /etc/systemd/system/photo-frame.service > /dev/null << EOF
 [Unit]
@@ -103,7 +131,8 @@ User=$USER
 WorkingDirectory=$(pwd)
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=/bin/bash -c '${venv_activate}${cmd}'
+Environment=PATH=/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/bin/bash -c '${venv_activate}${runtime_cmd}'
 Restart=always
 RestartSec=5
 
@@ -113,6 +142,7 @@ EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable photo-frame.service
+    log "Service created and enabled"
 }
 
 # Main

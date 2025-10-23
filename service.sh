@@ -53,7 +53,13 @@ case "$1" in
     test)
         echo "Testing photo frame components..."
         echo "1. Testing display manager..."
-        cd display && python3 display_manager.py test
+        if [ -d "venv" ]; then
+            source venv/bin/activate
+            cd display && python3 display_manager.py test
+            deactivate
+        else
+            cd display && python3 display_manager.py test
+        fi
         echo "2. Testing web server..."
         if curl -s http://localhost:3000/api/status > /dev/null; then
             echo "✓ Web server is running"
