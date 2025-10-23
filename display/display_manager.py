@@ -446,12 +446,16 @@ class DisplayManager:
                     # Find index for this pixel color
                     pixel_color = tuple(pixel[:3]) if isinstance(pixel, tuple) else (pixel, pixel, pixel)
 
-                    # Find closest match in our color map
+                    # Find closest match in our color map using Euclidean distance
+                    min_distance = float('inf')
                     closest_index = 0
+
                     for color, index in color_to_index.items():
-                        if pixel_color == color:
+                        # Calculate distance to find absolute closest color
+                        distance = sum((pixel_color[i] - color[i])**2 for i in range(3))
+                        if distance < min_distance:
+                            min_distance = distance
                             closest_index = index
-                            break
 
                     # Each byte holds 2 pixels (4 bits each)
                     byte_index = (y * width + x) // 2

@@ -204,13 +204,16 @@ app.post('/api/photo', async (c) => {
 				kernel: isPi ? 'nearest' : 'lanczos3',
 			});
 
-		// Add back color enhancements one by one
-		// Start with modulate ONLY (no negate, no sharpen)
+		// Add color enhancements with strong edge sharpening
 		const processedBuffer = await processStream
 			.modulate({
 				brightness: 1.0,
 				saturation: 3.0,  // Maximum saturation for color visibility
 				hue: 0,
+			})
+			// Add STRONG sharpening for edge preservation
+			.sharpen({
+				sigma: 2.0,  // Higher sigma for stronger effect
 			})
 			.jpeg({
 				quality: 100,  // MAXIMUM quality
