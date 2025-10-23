@@ -214,7 +214,7 @@ app.post('/api/photo', async (c) => {
 			// Step 3: Apply sharpening for clarity
 			.sharpen(1.2, 0.5, 0.5)  // Standard sharpening
 			.jpeg({
-				quality: isPi ? 95 : 98,  // High quality to preserve color information
+				quality: 100,  // MAXIMUM quality to preserve color (changed from 95-98)
 				progressive: false,       // Disable progressive for e-ink displays
 				optimiseScans: false,     // Disable optimization for faster processing
 			})
