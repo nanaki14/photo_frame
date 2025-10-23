@@ -239,29 +239,31 @@ class DisplayManager:
 
             # Apply E Ink Spectra 6 (6-color) optimizations
             # The display supports: Black, White, Red, Yellow, Green, Blue
+            # These colors are defined in the waveshare_epd module as constants
             logger.info("Applying E Ink Spectra 6 (6-color) optimizations")
 
-            def quantize_to_6_colors(r, g, b):
-                """
-                Quantize RGB color to one of the 6 E Ink Spectra 6 colors.
-                Returns RGB tuple closest to Spectra 6 palette.
-                """
-                # Define the 6 color palette for E Ink Spectra 6 (official)
-                palette = [
-                    (0, 0, 0),        # Black
-                    (255, 255, 255),  # White
-                    (255, 0, 0),      # Red
-                    (255, 255, 0),    # Yellow
-                    (0, 128, 0),      # Green
-                    (0, 0, 255),      # Blue
-                ]
+            # Official E Ink Spectra 6 color palette
+            # The Waveshare library internally uses these colors
+            SPECTRA_PALETTE = [
+                (0, 0, 0),        # Black
+                (255, 255, 255),  # White
+                (255, 0, 0),      # Red
+                (255, 255, 0),    # Yellow
+                (0, 128, 0),      # Green
+                (0, 0, 255),      # Blue
+            ]
 
-                # Find closest color in palette using Euclidean distance
+            def quantize_to_nearest_color(r, g, b):
+                """
+                Quantize RGB color to the nearest E Ink Spectra 6 color.
+                Uses Euclidean distance in RGB color space.
+                """
                 min_distance = float('inf')
-                closest_color = palette[0]
+                closest_color = SPECTRA_PALETTE[0]
 
-                for color in palette:
-                    # Calculate Euclidean distance in RGB space
+                for color in SPECTRA_PALETTE:
+                    # Euclidean distance: sqrt((r-cr)^2 + (g-cg)^2 + (b-cb)^2)
+                    # We use squared distance to avoid sqrt for performance
                     distance = (r - color[0])**2 + (g - color[1])**2 + (b - color[2])**2
                     if distance < min_distance:
                         min_distance = distance
@@ -269,34 +271,17 @@ class DisplayManager:
 
                 return closest_color
 
-            # Process image pixels
-            if SYSTEM_INFO['is_low_memory']:
-                # Use in-place operations to save memory on Pi Zero
-                pixels = background.load()
-                width, height = background.size
+            # Process image pixels and quantize to palette
+            # This converts the full RGB image to the limited 6-color palette
+            pixels = background.load()
+            for y in range(background.height):
+                for x in range(background.width):
+                    r, g, b = pixels[x, y]
+                    # Quantize to nearest color in Spectra 6 palette
+                    quantized = quantize_to_nearest_color(r, g, b)
+                    pixels[x, y] = quantized
 
-                # Process in chunks to avoid memory spikes
-                chunk_size = 100 if SYSTEM_INFO['is_pi'] else height
-
-                for y_start in range(0, height, chunk_size):
-                    y_end = min(y_start + chunk_size, height)
-                    for y in range(y_start, y_end):
-                        for x in range(width):
-                            r, g, b = pixels[x, y]
-                            # Quantize to nearest Spectra 6 color
-                            quantized = quantize_to_6_colors(r, g, b)
-                            pixels[x, y] = quantized
-            else:
-                # For systems with more memory, use RGB processing
-                pixels = background.load()
-                for y in range(background.height):
-                    for x in range(background.width):
-                        r, g, b = pixels[x, y]
-                        # Quantize to nearest Spectra 6 color
-                        quantized = quantize_to_6_colors(r, g, b)
-                        pixels[x, y] = quantized
-
-            logger.info(f"Image optimized for E Ink Spectra 6 display (6-color): {background.size}")
+            logger.info(f"Image optimized for E Ink Spectra 6 display (6-color quantized): {background.size}")
             return background
             
         except Exception as e:
@@ -304,32 +289,49 @@ class DisplayManager:
             return None
     
     def display_image(self, image_path: str) -> bool:
-        """Display an image on the e-ink screen"""
+        """
+        Display an image on the e-ink screen.
+
+        Process:
+        1. Optimize image for E Ink Spectra 6 (resize, center, quantize to 6 colors)
+        2. Convert to buffer format using epd.getbuffer()
+        3. Display buffer on screen using epd.display()
+        """
         try:
             if not self.is_initialized:
                 if not self.initialize():
+                    logger.error("Failed to initialize display")
                     return False
-            
-            # Optimize image for e-ink
+
+            logger.info(f"Processing image: {image_path}")
+
+            # Optimize image for E Ink Spectra 6
             optimized_image = self.optimize_image_for_eink(image_path)
             if not optimized_image:
-                logger.error("Failed to optimize image")
+                logger.error("Failed to optimize image for display")
                 return False
-            
-            # Convert to display format if needed
+
+            logger.info(f"Image optimized, size: {optimized_image.size}, mode: {optimized_image.mode}")
+
+            # Convert to display buffer format
+            # The Waveshare getbuffer() method handles the color-to-buffer conversion
             if hasattr(self.epd, 'getbuffer'):
-                # For newer Waveshare libraries that use getbuffer
+                logger.info("Using epd.getbuffer() for buffer conversion")
                 buffer = self.epd.getbuffer(optimized_image)
                 self.epd.display(buffer)
+                logger.info("Image displayed successfully via getbuffer()")
             else:
-                # For older libraries or mock
+                # Fallback for mock display
+                logger.info("Direct display (mock mode or legacy library)")
                 self.epd.display(optimized_image)
-            
+
             logger.info(f"Successfully displayed image: {image_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error displaying image: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def clear_display(self) -> bool:
