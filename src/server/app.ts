@@ -193,30 +193,17 @@ app.post('/api/photo', async (c) => {
 			sequentialRead: true, // Better for single-core Pi Zero
 		});
 
-		// CRITICAL FIX: Convert to RGB explicitly FIRST before any color operations
-		// Some JPEGs might be in other color spaces
-		let processStream = sharpInstance
-			.toColorspace('srgb')  // Ensure sRGB color space
+		// NO color enhancement - let Waveshare hardware handle the color conversion
+		// Simply resize to display dimensions with quality preservation
+		const processedBuffer = await sharpInstance
 			.resize(TARGET_WIDTH, TARGET_HEIGHT, {
 				fit: 'contain',
 				background: { r: 255, g: 255, b: 255 },
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
-			});
-
-		// Add color enhancements with strong edge sharpening
-		const processedBuffer = await processStream
-			.modulate({
-				brightness: 1.0,
-				saturation: 3.0,  // Maximum saturation for color visibility
-				hue: 0,
-			})
-			// Add STRONG sharpening for edge preservation
-			.sharpen({
-				sigma: 2.0,  // Higher sigma for stronger effect
 			})
 			.jpeg({
-				quality: 100,  // MAXIMUM quality
+				quality: 100,  // Preserve quality
 				progressive: false,
 				optimiseScans: false,
 			})

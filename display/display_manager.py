@@ -247,123 +247,22 @@ class DisplayManager:
             background.paste(img, (x_offset, y_offset))
 
             # Apply E Ink Spectra 6 (6-color) optimizations with aggressive color enhancement
-            # Strategy: Simple, direct color enhancement without LAB conversion
-            logger.info("Optimizing image for E Ink Spectra 6 with aggressive color enhancement")
+            # NO color enhancement - let Waveshare hardware handle color conversion
+            # Simply resize to display dimensions
+            logger.info("Preparing image for E Ink Spectra 6 display (NO color modification)")
 
-            # Save before enhancement for diagnostics
-            background.save("/tmp/01_before_enhancement.png")
-            logger.info("Saved diagnostic: /tmp/01_before_enhancement.png")
+            # Save original for diagnostics
+            background.save("/tmp/01_original_image.png")
+            logger.info("Saved diagnostic: /tmp/01_original_image.png")
 
-            # Step 1: Apply simple but aggressive color enhancement
-            # Avoid complex LAB conversion that may lose color information
-            logger.info("Step 1: Applying direct color enhancement")
+            # Resize to display dimensions if needed
+            if background.size != (DISPLAY_WIDTH, DISPLAY_HEIGHT):
+                background = background.resize((DISPLAY_WIDTH, DISPLAY_HEIGHT), Image.Resampling.LANCZOS)
+                logger.info(f"Resized to {DISPLAY_WIDTH}x{DISPLAY_HEIGHT}")
 
-            from PIL import ImageEnhance
-
-            # Enhance saturation moderately to compensate for 6-color limitation
-            # Note: Excessive saturation destroys skin tones and natural colors
-            # 2.5x was causing skin tones to become red-black artifacts
-            enhancer = ImageEnhance.Color(background)
-            background = enhancer.enhance(1.5)  # 150% saturation (moderate boost)
-            logger.info("Color saturation enhanced by 150%")
-            background.save("/tmp/02_after_saturation.png")
-
-            # Enhance contrast moderately to preserve dark colors
-            # Note: 1.8x was crushing dark blues to black/very dark
-            # Reduced to 1.3x to maintain color information
-            enhancer = ImageEnhance.Contrast(background)
-            background = enhancer.enhance(1.3)  # 30% contrast boost
-            logger.info("Contrast enhanced by 30%")
-            background.save("/tmp/03_after_contrast.png")
-
-            # Enhance brightness slightly for visibility
-            enhancer = ImageEnhance.Brightness(background)
-            background = enhancer.enhance(1.1)  # 10% brightness boost
-            logger.info("Brightness enhanced by 10%")
-            background.save("/tmp/04_after_brightness.png")
-
-            # Step 2: Direct 6-color mapping without palette quantize
-            # CRITICAL: PIL quantize() was destroying color information
-            # Use direct color mapping to the 6 core colors instead
-            logger.info("Step 2: Applying direct 6-color mapping")
-
-            # E Ink Spectra 6 core colors - per Waveshare HAT (E) specifications
-            # Reference: Official Waveshare quantization example
-            core_colors = [
-                (0, 0, 0),          # Black
-                (255, 255, 255),    # White
-                (255, 0, 0),        # Red
-                (255, 255, 0),      # Yellow
-                (0, 128, 0),        # Green - Official Waveshare value
-                (0, 0, 255),        # Blue
-            ]
-
-            logger.info(f"Core colors: {core_colors}")
-
-            # Convert image to array for pixel-by-pixel processing
-            img_array = background.load()
-            width, height = background.size
-
-            # Create output image
-            output = Image.new('RGB', (width, height))
-            out_array = output.load()
-
-            # Function to find closest color using Euclidean distance
-            def find_closest_color(r, g, b):
-                """Find closest core color to given RGB value"""
-                min_distance = float('inf')
-                closest = core_colors[0]
-
-                for color in core_colors:
-                    # Euclidean distance in RGB space
-                    distance = (r - color[0])**2 + (g - color[1])**2 + (b - color[2])**2
-                    if distance < min_distance:
-                        min_distance = distance
-                        closest = color
-
-                return closest
-
-            # Map each pixel to closest core color
-            logger.info("Mapping pixels to 6 core colors...")
-            processed_count = 0
-            for y in range(height):
-                for x in range(width):
-                    pixel = img_array[x, y]
-
-                    # Handle both RGB tuples and single values
-                    if isinstance(pixel, tuple):
-                        r, g, b = pixel[:3]
-                    else:
-                        r = g = b = pixel
-
-                    # Find and assign closest color
-                    closest = find_closest_color(r, g, b)
-                    out_array[x, y] = closest
-                    processed_count += 1
-
-                    # Log progress every 10000 pixels
-                    if processed_count % 100000 == 0:
-                        logger.info(f"Processed {processed_count}/{width*height} pixels...")
-
-            final_image = output
-            logger.info(f"Direct 6-color mapping complete: {processed_count} pixels processed")
-
-            # Save diagnostic images
-            final_image.save("/tmp/05_after_dithering.png")
-            logger.info("Saved diagnostic: /tmp/05_after_dithering.png")
-            final_image.save("/tmp/06_final_6color_mapped.png")
-            logger.info("Saved diagnostic: /tmp/06_final_6color_mapped.png")
-
-            # CRITICAL: Log pixel colors to verify color information is preserved
-            sample_pixels = [
-                final_image.getpixel((10, 10)),
-                final_image.getpixel((100, 100)),
-                final_image.getpixel((400, 240)),
-            ]
-            logger.info(f"Final image pixel samples: {sample_pixels}")
-
-            logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
-            logger.info("Color enhancement complete: direct 6-color nearest-neighbor mapping")
+            final_image = background
+            logger.info(f"Image ready for Waveshare getbuffer(): size={final_image.size}, mode={final_image.mode}")
+            logger.info("NOTE: All color conversion will be handled by Waveshare getbuffer() method")
             return final_image
             
         except Exception as e:
@@ -402,20 +301,16 @@ class DisplayManager:
 
             logger.info(f"Image ready for display: size={optimized_image.size}, mode={optimized_image.mode}")
 
-            # CRITICAL: Log pixel values before getbuffer()
+            # Log pixel values for diagnostics
             sample_pixel = optimized_image.getpixel((10, 10))
-            logger.info(f"BEFORE getbuffer() - Sample pixel at (10,10): {sample_pixel}")
+            logger.info(f"Sample pixel at (10,10): {sample_pixel}")
 
-            # CRITICAL: Pass the 6-color mapped image directly to getbuffer()
-            # Don't re-quantize - the colors are already mapped to the 6 core colors
-            logger.info("Using direct 6-color mapped image for display")
+            # Pass the original RGB image directly to Waveshare getbuffer()
+            # Waveshare's getbuffer() will handle all color conversion and dithering
             display_image = optimized_image
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
-
-            # The image is already 6-color mapped in optimize_image_for_eink()
-            # Just use official getbuffer() to convert to hardware buffer format
-            logger.info("Using official getbuffer() on pre-mapped image...")
+            logger.info("Using Waveshare getbuffer() for color conversion and dithering...")
 
             # Record start time for performance monitoring
             start_time = time.time()
