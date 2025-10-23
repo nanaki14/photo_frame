@@ -268,10 +268,12 @@ class DisplayManager:
             logger.info("Color saturation enhanced by 150%")
             background.save("/tmp/02_after_saturation.png")
 
-            # Enhance contrast to separate colors
+            # Enhance contrast moderately to preserve dark colors
+            # Note: 1.8x was crushing dark blues to black/very dark
+            # Reduced to 1.3x to maintain color information
             enhancer = ImageEnhance.Contrast(background)
-            background = enhancer.enhance(1.8)  # 80% contrast boost
-            logger.info("Contrast enhanced by 80%")
+            background = enhancer.enhance(1.3)  # 30% contrast boost
+            logger.info("Contrast enhanced by 30%")
             background.save("/tmp/03_after_contrast.png")
 
             # Enhance brightness slightly for visibility

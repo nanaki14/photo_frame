@@ -62,7 +62,7 @@ def enhance_color(rgb, saturation=1.5):
     img = enhancer.enhance(saturation)
 
     enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(1.8)
+    img = enhancer.enhance(1.3)  # Reduced from 1.8 to preserve dark colors
 
     enhancer = ImageEnhance.Brightness(img)
     img = enhancer.enhance(1.1)
@@ -171,6 +171,39 @@ def test_green_variations():
 
     return all_pass
 
+def test_dark_colors():
+    """Test dark blue and dark red colors (critical for image accuracy)"""
+    print("\n" + "="*70)
+    print("TEST 4: Dark Colors (Critical Fix for Dark Blue→Red Issue)")
+    print("="*70)
+
+    dark_colors = [
+        ("Pure Dark Blue", (0, 0, 128), "Blue"),
+        ("Navy/Denim", (25, 40, 80), "Blue"),
+        ("Dark Sky Blue", (30, 60, 140), "Blue"),
+        ("Dark Clothing Blue", (40, 70, 150), "Blue"),
+        ("Pure Dark Red", (128, 0, 0), "Red"),
+        ("Deep Red", (180, 50, 50), "Red"),
+    ]
+
+    all_pass = True
+    for label, color, expected_color in dark_colors:
+        enhanced = enhance_color(color, saturation=1.5)
+        idx, dist = find_closest_color(*enhanced)
+        mapped_color = COLOR_NAMES[idx]
+
+        # Dark blues should map to blue, dark reds to red
+        is_pass = mapped_color == expected_color
+        status = "✓" if is_pass else "✗"
+        all_pass = all_pass and is_pass
+
+        print(f"{status} {label:25} RGB{str(color):20} -> RGB{str(enhanced):20} -> {mapped_color:8}")
+
+        if not is_pass:
+            print(f"   ⚠️  Expected {expected_color}, got {mapped_color}")
+
+    return all_pass
+
 def test_color_enhancement_effects():
     """Test the actual enhancement pipeline"""
     print("\n" + "="*70)
@@ -217,6 +250,7 @@ def main():
         "Green Image": test_green_image(),
         "Skin Tone Image": test_skin_tone_image(),
         "Green Variations": test_green_variations(),
+        "Dark Colors": test_dark_colors(),
         "Enhancement Pipeline": test_color_enhancement_effects(),
     }
 
