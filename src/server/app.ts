@@ -217,9 +217,16 @@ app.post('/api/photo', async (c) => {
 
 		// Update display by calling Python script
 		try {
-			await execAsync(`python3 ${DISPLAY_SCRIPT} ${filepath}`);
+			console.log(`Executing display script: python3 ${DISPLAY_SCRIPT} ${filepath}`);
+			const { stdout, stderr } = await execAsync(`python3 ${DISPLAY_SCRIPT} ${filepath}`);
+			console.log('Display script stdout:', stdout);
+			if (stderr) {
+				console.error('Display script stderr:', stderr);
+			}
 		} catch (error) {
 			console.error('Display update failed:', error);
+			if (error.stdout) console.error('stdout:', error.stdout);
+			if (error.stderr) console.error('stderr:', error.stderr);
 			// Don't fail the upload if display update fails
 		}
 

@@ -1,0 +1,10 @@
+# Python dependencies for photo frame display system
+
+# Core dependencies
+numpy>=1.24.0
+Pillow>=10.0.0
+psutil>=5.9.0
+
+# Optional: Waveshare e-Paper library
+# Install manually from: https://github.com/waveshare/e-Paper
+# Or: git clone https://github.com/waveshare/e-Paper.git ~/e-Paper

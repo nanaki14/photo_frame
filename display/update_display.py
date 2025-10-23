@@ -13,6 +13,16 @@ from pathlib import Path
 
 # Add the display module to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Check for required dependencies
+try:
+    import numpy as np
+    from PIL import Image
+except ImportError as e:
+    print(f"ERROR: Missing required dependency: {e}")
+    print("Please install: pip3 install numpy pillow")
+    sys.exit(1)
+
 from display_manager import DisplayManager
 
 # Configure logging
