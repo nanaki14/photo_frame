@@ -5,7 +5,7 @@ The photo frame was displaying colors with artifacts:
 - **Green areas appearing as red-black** instead of vibrant green
 - **People/skin tones appearing as white voids** instead of natural colors
 
-## Root Causes (Two Issues Found)
+## Root Causes (Three Issues Found)
 
 ### Issue 1: Excessive Saturation Boost (2.5x)
 The enhancement pipeline was destroying color balance in non-primary colors:
@@ -20,11 +20,17 @@ This extreme shift caused skin tones to map to yellow/red color range with unnat
 ### Issue 2: Incorrect Green Color Value
 The core color palette used `(0, 255, 0)` for green, but official Waveshare specifications define it as `(0, 128, 0)`, which is darker and better matches the actual e-ink display capabilities.
 
+### Issue 3: Excessive Contrast Enhancement (1.8x)
+The contrast enhancement was crushing dark colors to near-black, causing:
+- Dark blues to lose their color information
+- Dark reds to appear incorrectly
+- Overall loss of shadow detail and color depth
+
 ## Solution
-Two changes were made:
+Three critical changes were made:
 
 ### Fix 1: Reduce Saturation Enhancement (2.5x → 1.5x)
-Preserve color balance while maintaining enhancement:
+Preserve color balance in skin tones and natural colors:
 
 ```
 Original skin tone RGB(255, 200, 124) + 1.5x saturation → RGB(255, 196, 82)
@@ -34,6 +40,19 @@ Maps to Yellow - natural appearance for skin tones ✓
 
 ### Fix 2: Correct Green Color Value (0, 255, 0) → (0, 128, 0)
 Use official Waveshare color definition for better color accuracy on the actual hardware.
+
+### Fix 3: Reduce Contrast Enhancement (1.8x → 1.3x)
+Preserve dark color information and shadow detail:
+
+```
+Dark Blue RGB(30, 60, 140) with 1.8x contrast → RGB(0, 0, 0) [crushed to black]
+Dark Blue RGB(30, 60, 140) with 1.3x contrast → RGB(1, 66, 237) [preserves blue]
+```
+
+This fix ensures:
+- Dark blues display as blue (not red or black)
+- Dark reds display as red (not black)
+- Shadow areas retain color information
 
 ## Changes Made
 
@@ -57,6 +76,15 @@ core_colors = [(0, 255, 0)]  # Bright green
 core_colors = [(0, 128, 0)]  # Official Waveshare green
 ```
 
+**Change 3: Contrast Enhancement**
+```python
+# Before
+background = enhancer.enhance(1.8)  # 80% contrast boost - crushes dark colors
+
+# After
+background = enhancer.enhance(1.3)  # 30% contrast boost - preserves dark colors
+```
+
 ### Additional Code Cleanup
 Simplified `display_image()` method by removing redundant palette quantization that was conflicting with the 6-color mapping already done in `optimize_image_for_eink()`.
 
@@ -66,9 +94,10 @@ All validation tests pass:
 
 | Test | Result | Details |
 |------|--------|---------|
-| Pure Green Image | ✓ PASS | Green (0, 255, 0) → Green |
+| Pure Green Image | ✓ PASS | Green (0, 128, 0) → Green |
 | Skin Tone Image | ✓ PASS | Maps to Yellow (natural appearance) |
 | Green Variations | ✓ PASS | All shades map to green correctly |
+| Dark Colors | ✓ PASS | Dark blue → Blue, Dark red → Red (fixed!) |
 | Enhancement Pipeline | ✓ PASS | No color shifts, no artifacts |
 
 ## Color Mapping Examples
@@ -90,18 +119,35 @@ Maps to:  Green ✓
 ### Skin Tone
 ```
 Input:    RGB(255, 200, 124)
-Enhanced: RGB(255, 211, 0)
+Enhanced: RGB(255, 213, 50)
 Maps to:  Yellow ✓ (natural appearance, not white void)
+```
+
+### Dark Blue (Critical Fix)
+```
+Input:    RGB(30, 60, 140) [Dark Sky Blue]
+Enhanced: RGB(1, 66, 237)
+Maps to:  Blue ✓ (no longer crushed to black or red!)
+```
+
+### Dark Red
+```
+Input:    RGB(180, 50, 50) [Deep Red]
+Enhanced: RGB(255, 13, 13)
+Maps to:  Red ✓ (properly preserved)
 ```
 
 ## Expected Results on Display
 
 After deploying this fix, you should see:
 
-1. **Green areas display as vibrant green** (not red-black)
-2. **Skin tones display as natural yellow/warm colors** (not white voids)
-3. **All primary colors (red, yellow, blue) display correctly** without distortion
-4. **Sharp edges preserved** without blur or artifacts
+1. **Green areas display as vibrant green** (not red-black) ✓
+2. **Skin tones display as natural yellow/warm colors** (not white voids) ✓
+3. **Dark blue areas display as blue** (not red or black) ✓ **← NEW FIX**
+4. **Dark red areas display as red** (not black) ✓ **← NEW FIX**
+5. **All primary colors (red, yellow, blue, green) display correctly** ✓
+6. **Shadow areas retain color information** (not crushed to black) ✓
+7. **Sharp edges preserved** without blur or artifacts ✓
 
 ## Technical Details
 
