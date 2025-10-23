@@ -199,18 +199,21 @@ app.post('/api/photo', async (c) => {
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
 			})
-			// Optimize for e-ink color display characteristics
-			// E-ink displays benefit from higher contrast and slightly reduced saturation
+			// Enhance saturation for E Ink Spectra 6 color display
+			// E-ink has limited color palette, so boost saturation to preserve colors
 			.modulate({
-				brightness: 1.1, // Higher brightness for e-ink visibility
-				saturation: 0.9, // Slightly reduce saturation for better e-ink color reproduction
+				brightness: 1.05, // Slightly boost brightness
+				saturation: 1.3,  // Significantly boost saturation (was 0.9) for color preservation
+				hue: 0,          // No hue shift
 			})
-			// Apply slight sharpening for better e-ink clarity
-			.sharpen(1.0, 0.5, 0.5)
+			// Increase contrast for better color separation on e-ink
+			.normalize()
+			// Apply sharpening for better definition
+			.sharpen(1.5, 0.5, 1.0) // Enhanced sharpening (was 1.0, 0.5, 0.5)
 			.jpeg({
-				quality: isPi ? 90 : 95, // Higher quality for e-ink color accuracy
-				progressive: false, // Disable progressive for e-ink displays
-				optimiseScans: false, // Disable optimization for faster processing
+				quality: isPi ? 95 : 98, // Very high quality for color accuracy (was 90/95)
+				progressive: false,      // Disable progressive for e-ink displays
+				optimiseScans: false,    // Disable optimization for faster processing
 			})
 			.toBuffer();
 

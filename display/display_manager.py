@@ -237,13 +237,11 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply E Ink Spectra 6 (6-color) optimizations
+            # Apply E Ink Spectra 6 (6-color) optimizations with enhanced color preservation
             # The display supports: Black, White, Red, Yellow, Green, Blue
-            # These colors are defined in the waveshare_epd module as constants
-            logger.info("Applying E Ink Spectra 6 (6-color) optimizations")
+            logger.info("Applying E Ink Spectra 6 (6-color) optimizations with enhanced color")
 
             # Official E Ink Spectra 6 color palette
-            # The Waveshare library internally uses these colors
             SPECTRA_PALETTE = [
                 (0, 0, 0),        # Black
                 (255, 255, 255),  # White
@@ -253,35 +251,60 @@ class DisplayManager:
                 (0, 0, 255),      # Blue
             ]
 
-            def quantize_to_nearest_color(r, g, b):
+            def smart_quantize_to_color(r, g, b):
                 """
-                Quantize RGB color to the nearest E Ink Spectra 6 color.
-                Uses Euclidean distance in RGB color space.
+                Smart color quantization for E Ink Spectra 6.
+                Uses HSL (Hue, Saturation, Lightness) to preserve color information
+                better than simple Euclidean distance.
                 """
-                min_distance = float('inf')
-                closest_color = SPECTRA_PALETTE[0]
+                import colorsys
 
-                for color in SPECTRA_PALETTE:
-                    # Euclidean distance: sqrt((r-cr)^2 + (g-cg)^2 + (b-cb)^2)
-                    # We use squared distance to avoid sqrt for performance
-                    distance = (r - color[0])**2 + (g - color[1])**2 + (b - color[2])**2
-                    if distance < min_distance:
-                        min_distance = distance
-                        closest_color = color
+                # Convert RGB to HSL for better color analysis
+                # Normalize RGB to 0-1 range
+                r_norm = r / 255.0
+                g_norm = g / 255.0
+                b_norm = b / 255.0
 
-                return closest_color
+                h, l, s = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
 
-            # Process image pixels and quantize to palette
-            # This converts the full RGB image to the limited 6-color palette
+                # Determine if it's closer to black, white, or a color
+                # If saturation is low, it's grayscale
+                if s < 0.15:
+                    # Grayscale: choose between black and white based on lightness
+                    return (0, 0, 0) if l < 0.5 else (255, 255, 255)
+
+                # If saturation is high, use hue to select color
+                # Hue range: 0-1 represents 0-360 degrees
+                # Red: 0.0, Yellow: 0.166, Green: 0.333, Cyan: 0.5, Blue: 0.666, Magenta: 0.833
+
+                if h < 0.05 or h > 0.95:  # Red (0-18° or 342-360°)
+                    return (255, 0, 0)
+                elif 0.05 <= h < 0.18:  # Orange/Red-Yellow -> Yellow
+                    return (255, 255, 0)
+                elif 0.18 <= h < 0.42:  # Yellow/Green -> Yellow or Green
+                    # Closer to yellow if h < 0.25, else green
+                    return (255, 255, 0) if h < 0.25 else (0, 128, 0)
+                elif 0.42 <= h < 0.58:  # Green/Cyan -> Green
+                    return (0, 128, 0)
+                elif 0.58 <= h < 0.75:  # Cyan/Blue -> Blue
+                    return (0, 0, 255)
+                elif 0.75 <= h < 0.95:  # Blue/Magenta -> Blue or Red
+                    # Closer to blue if h < 0.83, else red
+                    return (0, 0, 255) if h < 0.83 else (255, 0, 0)
+                else:
+                    # Default to black
+                    return (0, 0, 0)
+
+            # Process image pixels with smart color quantization
             pixels = background.load()
             for y in range(background.height):
                 for x in range(background.width):
                     r, g, b = pixels[x, y]
-                    # Quantize to nearest color in Spectra 6 palette
-                    quantized = quantize_to_nearest_color(r, g, b)
+                    # Use smart HSL-based quantization
+                    quantized = smart_quantize_to_color(r, g, b)
                     pixels[x, y] = quantized
 
-            logger.info(f"Image optimized for E Ink Spectra 6 display (6-color quantized): {background.size}")
+            logger.info(f"Image optimized for E Ink Spectra 6 (HSL-based quantization): {background.size}")
             return background
             
         except Exception as e:
