@@ -367,8 +367,9 @@ class DisplayManager:
             logger.info(f"Palette includes: 6 core colors + red/yellow/green/blue variants + cyan/magenta/purple/orange/pink + 4 grays")
 
             # Step 3: Apply Floyd-Steinberg dithering with extended palette
-            # Extended palette enables better color mixing through dithering
-            logger.info("Step 3: Applying Floyd-Steinberg dithering with color-focused palette")
+            # NOTE: We're using quantize() which may have limitations
+            # This will show us if palette quantization itself is the problem
+            logger.info("Step 3: Applying Floyd-Steinberg dithering with extended palette")
 
             # Floyd-Steinberg dithering with extended color palette
             # Creates pseudo-colors through error diffusion across pixel neighborhoods
