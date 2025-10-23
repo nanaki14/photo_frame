@@ -42,18 +42,83 @@ open http://localhost:3000
 
 ### For Raspberry Pi Deployment
 
-```bash
-# 1. Copy project to your Pi
-scp -r . pi@raspberrypi.local:~/photo_frame
+#### Step 1: Prepare Your Pi
 
-# 2. SSH into Pi and run installation
-ssh pi@raspberrypi.local
-cd photo_frame
+```bash
+# Default Raspberry Pi OS credentials: pi / raspberry
+# Enable SSH and connect to your network first
+```
+
+#### Step 2: Copy Project & Build on Development Machine
+
+```bash
+# Build frontend
+bun run build
+
+# Copy to Pi (replace YOUR_PI_IP with actual IP address)
+scp -r . pi@YOUR_PI_IP:~/photo_frame
+```
+
+#### Step 3: Install on Raspberry Pi
+
+```bash
+# SSH into Pi
+ssh pi@YOUR_PI_IP
+cd ~/photo_frame
+
+# Run minimal installation script
+chmod +x install.sh
 ./install.sh
 
-# 3. Reboot and start service
-sudo reboot
-sudo systemctl start photo-frame
+# Follow prompts and wait for completion
+```
+
+#### Step 4: Start the Service
+
+```bash
+# After installation completes (no reboot needed)
+sudo systemctl start photo-frame.service
+
+# Verify service is running
+sudo systemctl status photo-frame.service
+
+# View real-time logs
+sudo journalctl -u photo-frame.service -f
+```
+
+#### Step 5: Access Web Interface
+
+```bash
+# Get Pi's IP address
+hostname -I
+
+# Open in browser
+http://<YOUR_PI_IP>:3000
+```
+
+#### Hardware Setup
+
+Before starting the service, ensure hardware is properly connected:
+
+1. **Waveshare e-Paper HAT**: Connect to Raspberry Pi's 40-pin GPIO header
+2. **Power Supply**: Use 5V 2.5A or better (USB-C on Pi Zero 2 WH)
+3. **MicroSD Card**: 16GB+ with Raspberry Pi OS Lite pre-installed
+
+#### Troubleshooting
+
+```bash
+# Check service logs
+sudo journalctl -u photo-frame.service -n 50
+
+# Manually test display (if Python display manager exists)
+cd ~/photo_frame/display
+python3 -c "from display_manager import DisplayManager; d = DisplayManager(); print('OK')"
+
+# Restart service
+sudo systemctl restart photo-frame.service
+
+# Enable auto-start on boot (should already be enabled)
+sudo systemctl enable photo-frame.service
 ```
 
 ## 📱 Usage

@@ -41,8 +41,19 @@ install_project_deps() {
     # Python dependencies (if display dir exists)
     if [ -d "display" ] && [ -f "display/requirements.txt" ]; then
         log "Setting up Python dependencies..."
+
+        # Create virtual environment (PEP 668 compliant)
+        python3 -m venv venv
+        source venv/bin/activate
+
+        # Upgrade pip in venv
         python3 -m pip install --upgrade pip
+
+        # Install requirements in venv
         pip install -r display/requirements.txt
+
+        # Deactivate venv (service will activate it)
+        deactivate
     fi
 
     # Node.js dependencies
@@ -67,10 +78,18 @@ create_service() {
     log "Setting up systemd service..."
 
     local cmd
+    local venv_activate=""
+
+    # Determine runtime and set command
     if command -v bun &>/dev/null; then
         cmd="bun start"
     else
         cmd="npm start"
+    fi
+
+    # If venv was created, activate it in the service
+    if [ -d "venv" ]; then
+        venv_activate="source venv/bin/activate && "
     fi
 
     sudo tee /etc/systemd/system/photo-frame.service > /dev/null << EOF
@@ -84,7 +103,7 @@ User=$USER
 WorkingDirectory=$(pwd)
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=$cmd
+ExecStart=/bin/bash -c '${venv_activate}${cmd}'
 Restart=always
 RestartSec=5
 
