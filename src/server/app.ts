@@ -200,23 +200,19 @@ app.post('/api/photo', async (c) => {
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
 			})
-			// Step 1: Normalize to maximize tonal range
-			.normalize()
-			// Step 2: Significantly enhance colors for E Ink Spectra 6
-			// The 6-color palette is limited, so we need VERY aggressive enhancement
-			// Increased from 1.8 to 3.0 to overcome e-ink color limitations
+			// CRITICAL: Do NOT normalize - it destroys color in uniform color images
+			// Normalize() stretches tonal range which can strip color information
+			// Step 1: Enhance color saturation directly without normalizing
 			.modulate({
 				brightness: 1.0,   // Maintain original brightness
-				saturation: 3.0,   // AGGRESSIVE boost (increased from 1.8 to 3.0)
+				saturation: 2.5,   // Strong saturation boost (avoid 3.0 which is too aggressive)
 				hue: 0,            // No hue shift
 			})
-			// Step 3: Increase contrast EVEN MORE to separate colors distinctly
-			.negate({ alpha: false })  // Invert once temporarily
+			// Step 2: Increase contrast with single negate pair (proven method)
+			.negate({ alpha: false })  // Invert once
 			.negate({ alpha: false })  // Invert back - creates contrast boost
-			.negate({ alpha: false })  // Additional invert pair for extra contrast
-			.negate({ alpha: false })  // (total 4 negations = 2x contrast boost)
-			// Step 4: Apply edge enhancement for clarity
-			.sharpen(1.5, 0.8, 0.8)  // Increased sharpening
+			// Step 3: Apply sharpening for clarity
+			.sharpen(1.2, 0.5, 0.5)  // Standard sharpening
 			.jpeg({
 				quality: isPi ? 95 : 98,  // High quality to preserve color information
 				progressive: false,       // Disable progressive for e-ink displays
