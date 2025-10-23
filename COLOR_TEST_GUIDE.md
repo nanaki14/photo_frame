@@ -2,6 +2,20 @@
 
 This guide provides step-by-step instructions to verify that the color optimization enhancements are working correctly on your Waveshare E Ink Spectra 6 display.
 
+## Color Palette Information
+
+The system uses **hardware-optimized color values** based on research from the EPF project. These values account for how actual e-ink hardware renders colors:
+
+**Core Colors Used**:
+- **Black**: RGB(0, 0, 0)
+- **White**: RGB(255, 255, 255)
+- **Red**: RGB(191, 0, 0) ← Adjusted from pure (255, 0, 0)
+- **Yellow**: RGB(255, 243, 56) ← Adjusted from pure (255, 255, 0)
+- **Green**: RGB(67, 138, 28) ← Adjusted from pure (0, 128, 0)
+- **Blue**: RGB(100, 64, 255) ← Adjusted from pure (0, 0, 255)
+
+Using adjusted values provides better color fidelity on the actual display compared to theoretical RGB values.
+
 ## Quick Start: Test Color Display
 
 ### Option 1: Local Development Testing (Fastest)
@@ -54,30 +68,25 @@ from PIL import Image, ImageDraw
 img = Image.new('RGB', (800, 480), 'white')
 draw = ImageDraw.Draw(img)
 
+# Hardware-optimized E Ink Spectra 6 colors
+# Based on EPF project research - these map better to actual hardware
+colors = {
+    'BLACK': ((0, 0, 0), 'white'),           # Black
+    'WHITE': ((255, 255, 255), 'black'),     # White
+    'RED': ((191, 0, 0), 'white'),           # Red (adjusted)
+    'YELLOW': ((255, 243, 56), 'black'),     # Yellow (adjusted)
+    'GREEN': ((67, 138, 28), 'white'),       # Green (adjusted)
+    'BLUE': ((100, 64, 255), 'white'),       # Blue (adjusted)
+}
+
 # Draw rectangles for each core color
-# Black
-draw.rectangle([(0, 0), (133, 240)], fill='black')
-draw.text((30, 100), 'BLACK', fill='white')
-
-# Red
-draw.rectangle([(133, 0), (266, 240)], fill='red')
-draw.text((160, 100), 'RED', fill='black')
-
-# Yellow
-draw.rectangle([(266, 0), (399, 240)], fill='yellow')
-draw.text((300, 100), 'YELLOW', fill='black')
-
-# Green
-draw.rectangle([(399, 0), (532, 240)], fill=(0, 128, 0))
-draw.text((420, 100), 'GREEN', fill='white')
-
-# Blue
-draw.rectangle([(532, 0), (665, 240)], fill='blue')
-draw.text((560, 100), 'BLUE', fill='white')
-
-# White
-draw.rectangle([(665, 0), (800, 240)], fill='white')
-draw.text((690, 100), 'WHITE', fill='black')
+x_positions = [0, 133, 266, 399, 532, 665]
+x = 0
+for i, (name, (color, text_color)) in enumerate(colors.items()):
+    x1 = x_positions[i]
+    x2 = x_positions[i] if i == 5 else x_positions[i+1]
+    draw.rectangle([(x1, 0), (x2, 240)], fill=color)
+    draw.text((x1 + 20, 100), name, fill=text_color)
 
 # Bottom half: Grayscale gradient
 for x in range(800):
@@ -85,7 +94,7 @@ for x in range(800):
     draw.rectangle([(x, 240), (x+1, 480)], fill=(gray, gray, gray))
 
 img.save('color_test.jpg', 'JPEG')
-print("✓ Created color_test.jpg")
+print("✓ Created color_test.jpg with hardware-optimized palette")
 EOF
 ```
 
