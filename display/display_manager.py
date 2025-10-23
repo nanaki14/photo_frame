@@ -279,107 +279,70 @@ class DisplayManager:
             logger.info("Brightness enhanced by 10%")
             background.save("/tmp/04_after_brightness.png")
 
-            # Step 2: Create extended color palette
-            # Use more aggressive and diverse colors to ensure proper quantization
-            logger.info("Step 2: Creating extended color palette with color-focused variants")
+            # Step 2: Direct 6-color mapping without palette quantize
+            # CRITICAL: PIL quantize() was destroying color information
+            # Use direct color mapping to the 6 core colors instead
+            logger.info("Step 2: Applying direct 6-color mapping")
 
-            # E Ink Spectra 6 core colors - MUST match Waveshare hardware expectations
-            # These are the official 6 colors that the e-paper hardware can display
-            # Order and values matter - hardware driver maps these specific values
+            # E Ink Spectra 6 core colors - the ONLY colors the display can show
             core_colors = [
-                (0, 0, 0),          # Black - standard
-                (255, 255, 255),    # White - standard
-                (255, 0, 0),        # Red - pure red for max saturation
-                (255, 255, 0),      # Yellow - pure yellow for max saturation
-                (0, 128, 0),        # Green - standard e-ink green (NOT our custom 0,200,0)
-                (0, 0, 255),        # Blue - pure blue for max saturation
+                (0, 0, 0),          # Black
+                (255, 255, 255),    # White
+                (255, 0, 0),        # Red
+                (255, 255, 0),      # Yellow
+                (0, 128, 0),        # Green
+                (0, 0, 255),        # Blue
             ]
 
-            # Create extended palette with intermediate shades
-            # This gives the dithering algorithm more colors to work with
-            extended_palette = list(core_colors)
+            logger.info(f"Core colors: {core_colors}")
 
-            # Color-focused palette variants
-            # Prioritize pure, saturated colors and their intermediate shades
-            color_variations = [
-                # Red spectrum (pure to light)
-                (200, 0, 0),        # Darker Red
-                (255, 0, 0),        # Pure Red (duplicate for weight)
-                (255, 80, 80),      # Light Red
+            # Convert image to array for pixel-by-pixel processing
+            img_array = background.load()
+            width, height = background.size
 
-                # Yellow spectrum (pure to light)
-                (200, 200, 0),      # Dark Yellow
-                (255, 255, 0),      # Pure Yellow (duplicate for weight)
-                (255, 255, 100),    # Light Yellow
+            # Create output image
+            output = Image.new('RGB', (width, height))
+            out_array = output.load()
 
-                # Green spectrum (pure to light)
-                (0, 150, 0),        # Medium Green
-                (0, 200, 0),        # Bright Green
-                (100, 255, 100),    # Light Green
+            # Function to find closest color using Euclidean distance
+            def find_closest_color(r, g, b):
+                """Find closest core color to given RGB value"""
+                min_distance = float('inf')
+                closest = core_colors[0]
 
-                # Blue spectrum (pure to light)
-                (0, 0, 200),        # Dark Blue
-                (0, 0, 255),        # Pure Blue (duplicate for weight)
-                (100, 100, 255),    # Light Blue
+                for color in core_colors:
+                    # Euclidean distance in RGB space
+                    distance = (r - color[0])**2 + (g - color[1])**2 + (b - color[2])**2
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest = color
 
-                # Cyan (Blue + Green)
-                (0, 200, 200),      # Cyan
-                (0, 255, 255),      # Bright Cyan
+                return closest
 
-                # Magenta (Red + Blue)
-                (200, 0, 200),      # Magenta
-                (255, 0, 255),      # Bright Magenta
+            # Map each pixel to closest core color
+            logger.info("Mapping pixels to 6 core colors...")
+            processed_count = 0
+            for y in range(height):
+                for x in range(width):
+                    pixel = img_array[x, y]
 
-                # Purple (Red + Blue, more red)
-                (160, 0, 160),      # Deep Purple
-                (200, 100, 200),    # Light Purple
+                    # Handle both RGB tuples and single values
+                    if isinstance(pixel, tuple):
+                        r, g, b = pixel[:3]
+                    else:
+                        r = g = b = pixel
 
-                # Orange (Red + Yellow)
-                (255, 150, 0),      # Orange
-                (255, 200, 0),      # Light Orange
+                    # Find and assign closest color
+                    closest = find_closest_color(r, g, b)
+                    out_array[x, y] = closest
+                    processed_count += 1
 
-                # Pink (Red + White)
-                (255, 150, 150),    # Pink
-                (255, 200, 200),    # Light Pink
+                    # Log progress every 10000 pixels
+                    if processed_count % 100000 == 0:
+                        logger.info(f"Processed {processed_count}/{width*height} pixels...")
 
-                # Neutral grays for transitions
-                (50, 50, 50),       # Dark Gray
-                (100, 100, 100),    # Medium Gray
-                (150, 150, 150),    # Light Gray
-                (200, 200, 200),    # Very Light Gray
-            ]
-
-            extended_palette.extend(color_variations)
-
-            # Create palette image with extended colors
-            palette_image = Image.new('P', (1, 1))
-            palette = []
-
-            for color in extended_palette[:240]:  # Use up to 240 colors
-                palette.extend(color)
-
-            # Pad to 256 colors (768 bytes)
-            while len(palette) < 768:
-                palette.append(0)
-
-            palette_image.putpalette(palette)
-            logger.info(f"Created extended palette with {len(extended_palette)} color variations (color-focused spectrum)")
-            logger.info(f"Palette includes: 6 core colors + red/yellow/green/blue variants + cyan/magenta/purple/orange/pink + 4 grays")
-
-            # Step 3: Apply Floyd-Steinberg dithering with extended palette
-            # NOTE: We're using quantize() which may have limitations
-            # This will show us if palette quantization itself is the problem
-            logger.info("Step 3: Applying Floyd-Steinberg dithering with extended palette")
-
-            # Floyd-Steinberg dithering with extended color palette
-            # Creates pseudo-colors through error diffusion across pixel neighborhoods
-            quantized_image = background.quantize(
-                palette=palette_image,
-                dither=Image.FLOYDSTEINBERG  # Floyd-Steinberg error diffusion
-            )
-
-            # Convert back to RGB for display
-            final_image = quantized_image.convert('RGB')
+            final_image = output
+            logger.info(f"Direct 6-color mapping complete: {processed_count} pixels processed")
 
             # Save diagnostic images
             final_image.save("/tmp/05_after_dithering.png")
