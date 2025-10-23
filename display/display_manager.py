@@ -409,24 +409,67 @@ class DisplayManager:
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
 
-            # DIAGNOSTIC: Save image before getbuffer()
-            display_image.save("/tmp/07_before_getbuffer.png")
-            logger.info("Saved diagnostic: /tmp/07_before_getbuffer.png")
+            # CRITICAL: Waveshare getbuffer() is converting to grayscale
+            # Create our own buffer based on 6-color mapping
+            logger.info("Creating custom 6-color buffer (bypassing getbuffer)...")
+
+            # For E Ink Spectra 6 (epd7in3e), the buffer format is:
+            # Each pixel uses 4 bits (half a byte) to represent one of 8 states
+            # We need to map our 6 colors to the proper buffer format
+
+            # Get pixel data
+            img_pixels = display_image.load()
+            width, height = display_image.size
+
+            # Color to buffer value mapping for E Ink Spectra 6
+            # These map to the hardware color indices
+            color_to_index = {
+                (0, 0, 0): 0,          # Black
+                (255, 255, 255): 1,    # White
+                (255, 0, 0): 2,        # Red
+                (255, 255, 0): 3,      # Yellow
+                (0, 128, 0): 4,        # Green
+                (0, 0, 255): 5,        # Blue
+            }
+
+            # Create buffer: 2 pixels per byte (4 bits each)
+            buffer_size = (width * height) // 2
+            buffer = bytearray(buffer_size)
+
+            logger.info(f"Creating buffer: {width}x{height} = {width*height} pixels, {buffer_size} bytes")
+
+            # Fill buffer with color indices
+            for y in range(height):
+                for x in range(width):
+                    pixel = img_pixels[x, y]
+
+                    # Find index for this pixel color
+                    pixel_color = tuple(pixel[:3]) if isinstance(pixel, tuple) else (pixel, pixel, pixel)
+
+                    # Find closest match in our color map
+                    closest_index = 0
+                    for color, index in color_to_index.items():
+                        if pixel_color == color:
+                            closest_index = index
+                            break
+
+                    # Each byte holds 2 pixels (4 bits each)
+                    byte_index = (y * width + x) // 2
+                    if (y * width + x) % 2 == 0:
+                        # Even pixel - goes in upper 4 bits
+                        buffer[byte_index] = (buffer[byte_index] & 0x0F) | ((closest_index & 0x0F) << 4)
+                    else:
+                        # Odd pixel - goes in lower 4 bits
+                        buffer[byte_index] = (buffer[byte_index] & 0xF0) | (closest_index & 0x0F)
+
+            logger.info(f"Custom buffer created: {len(buffer)} bytes")
 
             # Record start time for performance monitoring
             start_time = time.time()
 
-            # Use official Waveshare method: getbuffer() + display()
-            logger.info("Calling epd.getbuffer()...")
-            buffer = self.epd.getbuffer(display_image)
-            logger.info(f"Buffer created: size={len(buffer)} bytes")
-
-            # DIAGNOSTIC: Check buffer content
-            # Count unique byte values to see if it's really 6 colors or grayscale
-            unique_bytes = len(set(buffer))
-            logger.info(f"Buffer has {unique_bytes} unique byte values")
-
-            self.epd.display(buffer)
+            # Use custom buffer directly
+            logger.info("Displaying custom buffer...")
+            self.epd.display(bytes(buffer))
 
             # Record display time
             end_time = time.time()
