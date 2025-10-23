@@ -11,6 +11,67 @@ const execAsync = promisify(exec);
 
 const app = new Hono();
 
+// Live reload functionality for development using file watching
+const isDevelopment = process.env.NODE_ENV !== 'production';
+let reloadClients: Set<any> = new Set();
+
+if (isDevelopment) {
+	// SSE endpoint for live reload
+	app.get('/dev/reload', async (c) => {
+		const headers = new Headers({
+			'Content-Type': 'text/event-stream',
+			'Cache-Control': 'no-cache',
+			'Connection': 'keep-alive',
+			'Access-Control-Allow-Origin': '*',
+		});
+
+		const encoder = new TextEncoder();
+		const stream = new ReadableStream({
+			start(controller) {
+				// Add client to set
+				const client = { controller };
+				reloadClients.add(client);
+
+				// Send initial connection message
+				controller.enqueue(encoder.encode('data: connected\n\n'));
+
+				// Remove client when connection closes
+				const cleanup = () => {
+					reloadClients.delete(client);
+				};
+
+				// Store cleanup function
+				client.cleanup = cleanup;
+			},
+		});
+
+		return new Response(stream, { headers });
+	});
+
+	// Watch for file changes in dist directory
+	const { watch } = require('fs');
+	const distPath = path.join(process.cwd(), 'src', 'dist');
+
+	watch(distPath, { recursive: true }, (eventType: string, filename: string) => {
+		if (filename && (
+			filename.endsWith('.js') ||
+			filename.endsWith('.html') ||
+			filename.endsWith('.css')
+		)) {
+			console.log(`🔄 Triggering browser reload for: ${filename}`);
+			const encoder = new TextEncoder();
+			reloadClients.forEach(client => {
+				try {
+					client.controller.enqueue(encoder.encode('data: reload\n\n'));
+				} catch (e) {
+					// Client disconnected
+					reloadClients.delete(client);
+				}
+			});
+		}
+	});
+}
+
 // Configuration
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const DISPLAY_SCRIPT = path.join(process.cwd(), 'display', 'update_display.py');
@@ -116,9 +177,8 @@ app.post('/api/photo', async (c) => {
 			console.log('No existing files to remove or error removing:', error);
 		}
 
-		// Generate filename
-		const timestamp = Date.now();
-		const filename = `photo_${timestamp}.jpg`;
+		// Generate filename (fixed name)
+		const filename = `photo.jpg`;
 		const filepath = path.join(UPLOAD_DIR, filename);
 
 		// Convert File to Buffer

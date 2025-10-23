@@ -86,7 +86,7 @@ export class FileManager {
 			// Create photo metadata
 			const photo: Photo = {
 				filename,
-				originalName,
+				originalName: 'photo',
 				size: processedImage.buffer.length,
 				width: processedImage.metadata.width,
 				height: processedImage.metadata.height,

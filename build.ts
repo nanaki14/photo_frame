@@ -188,23 +188,49 @@ await runBuild(cliConfig, outdir, true);
 // Watch mode
 if (watchMode) {
 	console.log('👀 Watching for changes...\n');
-	
+
 	let timeout: NodeJS.Timeout;
-	const debounce = (fn: Function, delay: number) => {
-		return (...args: any[]) => {
-			clearTimeout(timeout);
-			timeout = setTimeout(() => fn(...args), delay);
-		};
+	let isBuilding = false;
+	const pendingFiles = new Set<string>();
+
+	const debouncedBuild = async () => {
+		if (isBuilding) {
+			return; // Skip if already building
+		}
+
+		clearTimeout(timeout);
+		timeout = setTimeout(async () => {
+			if (isBuilding || pendingFiles.size === 0) {
+				return;
+			}
+
+			isBuilding = true;
+			const changedFiles = Array.from(pendingFiles);
+			pendingFiles.clear();
+
+			console.log(`🔄 Files changed (${changedFiles.join(', ')}), rebuilding...`);
+
+			try {
+				await runBuild(cliConfig, outdir, false);
+			} finally {
+				isBuilding = false;
+			}
+		}, 300);
 	};
 
-	const debouncedBuild = debounce(async () => {
-		console.log('🔄 Files changed, rebuilding...');
-		await runBuild(cliConfig, outdir, false);
-	}, 300);
-
-	// Watch src directory
+	// Watch only frontend-specific files (excluding all server-related files)
 	watch('./src', { recursive: true }, (eventType, filename) => {
-		if (filename && (filename.endsWith('.tsx') || filename.endsWith('.ts') || filename.endsWith('.css') || filename.endsWith('.html'))) {
+		if (filename &&
+			// Only watch frontend files
+			(filename.includes('components/') || filename.includes('hooks/') || filename.includes('lib/') ||
+			 filename === 'App.tsx' || filename.endsWith('.css') || filename.endsWith('.html')) &&
+			// Exclude build output and temp files
+			!filename.includes('dist/') &&
+			!filename.includes('.map') &&
+			!filename.includes('node_modules') &&
+			!filename.includes('.tmp')
+		) {
+			pendingFiles.add(filename);
 			debouncedBuild();
 		}
 	});

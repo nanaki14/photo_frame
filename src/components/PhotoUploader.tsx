@@ -152,7 +152,7 @@ export function PhotoUploader() {
 
 			<div className="space-y-4">
 				<Card
-					className={`cursor-pointer border-2 border-dashed transition-colors ${
+					className={`cursor-pointer border border-dashed rounded transition-colors ${
 						dragActive
 							? 'border-blue-500 bg-blue-50'
 							: uploadPhoto.isError

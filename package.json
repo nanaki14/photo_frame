@@ -6,8 +6,12 @@
 	"main": "src/index.tsx",
 	"module": "src/index.tsx",
 	"scripts": {
-		"dev": "concurrently \"bun run build:dev --watch\" \"bun --hot src/index.tsx\"",
+		"dev": "bun run build:once && concurrently -n \"build,server\" -c \"blue,green\" \"bun run build:watch\" \"bun run server:stable\"",
 		"build:dev": "bun run build.ts --outdir=src/dist --no-minify --source-map=inline",
+		"build:once": "bun run build.ts --outdir=src/dist --no-minify --source-map=inline",
+		"build:watch": "bun run build.ts --outdir=src/dist --no-minify --source-map=inline --watch",
+		"server:dev": "bun --hot src/index.tsx",
+		"server:stable": "bun --watch src/index.tsx",
 		"start": "NODE_ENV=production bun src/index.tsx",
 		"build": "bun run build.ts",
 		"install-pi": "./install.sh",
