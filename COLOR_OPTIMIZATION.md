@@ -97,13 +97,23 @@ The color optimization is implemented as a three-stage pipeline with LAB color s
    # Step 3: Apply reverse gamma correction (sRGB)
    ```
 
-3. **Extended Color Palette** (Now includes 31+ color variations):
+3. **Extended Color Palette with Purple Emphasis** (Now includes 40+ color variations):
    - 6 core colors (hardware-optimized)
-   - 4 dark variants
-   - 4 light variants
-   - 4 additional medium variants
-   - 7 neutral grays (improved gradation)
-   Total: More granular color representation for better dithering
+   - Red variants: 4 colors (dark to light)
+   - Yellow variants: 3 colors (dark to light)
+   - Green variants: 3 colors (dark to light)
+   - Blue variants: 3 colors (dark to light)
+   - **★ Purple/Magenta variants: 12 colors (NEW - critical for color fidelity)**
+     - Pure Purple, Medium Purple, Light Purple, Very Light Purple
+     - Deep Purple, Blue-Purple, Red-Purple
+     - Pure Magenta, Bright Magenta, Light Magenta variations
+   - Neutral grays: 7 colors (for smooth transitions)
+
+   **Why Purple Emphasis?**
+   - E-ink displays struggle to show purple (requires both red AND blue)
+   - Without purple in palette, purple images appear gray
+   - 12 purple variants enable dithering to create various purple shades
+   - Total: 40+ colors provide comprehensive color coverage
 
 3. **Extended Palette Creation**:
 
@@ -203,14 +213,16 @@ a = 500 * (f(X/Xn) - f(Y/Yn))   # Red-Green (-127 to 127)
 b = 200 * (f(Y/Yn) - f(Z/Zn))   # Yellow-Blue (-127 to 127)
 ```
 
-**Chrominance Boost** (display_manager.py, lines 308-314):
+**Chrominance Boost with Purple Emphasis** (display_manager.py, lines 310-319):
 ```python
-# Boost color channels independently from brightness
-a_channel *= 1.4   # 40% boost for red-green axis
-b_channel *= 1.4   # 40% boost for yellow-blue axis
-L_channel *= 1.1   # 10% boost for luminance (modest)
+# Aggressive boost with purple emphasis
+# Purple is (Red + Blue) - needs both a and b channel boost
+a_channel *= 1.6   # 60% boost for red-green axis (more aggressive)
+b_channel *= 1.8   # 80% boost for yellow-blue axis (maximum for blue/purple)
+L_channel *= 1.15  # 15% boost for luminance (improved contrast)
 
-# This produces vibrant colors without looking oversaturated or unnatural
+# Result: Purple and magenta colors are maximally enhanced
+# This ensures purple appears vibrant instead of gray
 ```
 
 **LAB → RGB Conversion** (Reverse pipeline):

@@ -300,18 +300,23 @@ class DisplayManager:
 
             logger.info("Converted to LAB color space")
 
-            # Step 2: Enhance color channels in LAB space
+            # Step 2: Enhance color channels in LAB space with purple emphasis
             # Boost a and b channels (chrominance) to increase color saturation
+            # Extra emphasis on b channel to enhance blue/purple colors
             # Keep L channel (luminance) relatively unchanged for natural brightness
-            logger.info("Step 2: Enhancing chrominance (color) channels in LAB space")
+            logger.info("Step 2: Enhancing chrominance (color) channels in LAB space with purple emphasis")
 
-            img_lab[..., 1] = np.clip(img_lab[..., 1] * 1.4, -127, 127)  # Boost a channel (red-green)
-            img_lab[..., 2] = np.clip(img_lab[..., 2] * 1.4, -127, 127)  # Boost b channel (yellow-blue)
+            # Aggressive boosting of both chrominance channels to maximize color visibility
+            # a channel (red-green axis): 60% boost
+            img_lab[..., 1] = np.clip(img_lab[..., 1] * 1.6, -127, 127)
 
-            # Slightly enhance luminance for better contrast
-            img_lab[..., 0] = np.clip(img_lab[..., 0] * 1.1, 0, 100)
+            # b channel (yellow-blue axis): 80% boost (more aggressive for purple/blue)
+            img_lab[..., 2] = np.clip(img_lab[..., 2] * 1.8, -127, 127)
 
-            logger.info("Chrominance enhanced by 40%, luminance by 10%")
+            # Enhance luminance for better overall contrast and visibility
+            img_lab[..., 0] = np.clip(img_lab[..., 0] * 1.15, 0, 100)
+
+            logger.info("Chrominance enhanced: a-channel +60%, b-channel +80% (purple emphasis), luminance +15%")
 
             # Step 3: Convert back to RGB
             logger.info("Step 3: Converting back to RGB color space")
@@ -367,24 +372,45 @@ class DisplayManager:
             # This gives the dithering algorithm more colors to work with
             extended_palette = list(core_colors)
 
-            # Add darker and lighter variants for better gradation
-            # Variants are based on adjusted core colors for consistency
+            # Add purple-heavy palette variants for better color representation
+            # Emphasis on purple/magenta since e-ink displays struggle with these colors
             color_variations = [
-                # Darker variants (darker shades of adjusted colors)
-                (96, 0, 0),         # Dark Red (from 191,0,0)
-                (128, 122, 28),     # Dark Yellow (from 255,243,56)
-                (34, 69, 14),       # Dark Green (from 67,138,28)
-                (50, 32, 128),      # Dark Blue (from 100,64,255)
-                # Lighter/intermediate variants
+                # Red variants
+                (96, 0, 0),         # Dark Red
+                (128, 64, 64),      # Medium Dark Red
                 (223, 128, 128),    # Medium Red
+                (255, 180, 180),    # Light Red
+
+                # Yellow variants
+                (128, 122, 28),     # Dark Yellow
+                (192, 180, 100),    # Medium Yellow
                 (255, 249, 156),    # Light Yellow
-                (150, 196, 142),    # Medium Green
-                (177, 160, 255),    # Light Blue
-                # Additional color variants for better gradation
-                (128, 64, 64),      # Darker Medium Red
-                (192, 122, 56),     # Medium Yellow
+
+                # Green variants
+                (34, 69, 14),       # Dark Green
                 (100, 180, 64),     # Medium Green
-                (140, 100, 200),    # Medium Blue
+                (150, 196, 142),    # Light Green
+
+                # Blue variants
+                (50, 32, 128),      # Dark Blue
+                (100, 100, 200),    # Medium Blue
+                (177, 160, 255),    # Light Blue
+
+                # ★ PURPLE/MAGENTA VARIANTS (newly added - critical for color fidelity)
+                (128, 0, 128),      # Pure Purple
+                (150, 50, 150),     # Medium Purple
+                (180, 100, 180),    # Light Purple
+                (200, 120, 200),    # Very Light Purple
+                (160, 0, 160),      # Deep Purple
+                (100, 0, 150),      # Blue-Purple
+                (150, 0, 100),      # Red-Purple
+
+                # Magenta variants (Red + Blue)
+                (150, 0, 150),      # Magenta
+                (200, 0, 200),      # Bright Magenta
+                (255, 0, 255),      # Pure Magenta
+                (200, 100, 200),    # Light Magenta
+
                 # Neutral grays for smooth transitions
                 (32, 32, 32),       # Very Dark Gray
                 (64, 64, 64),       # Dark Gray
@@ -409,7 +435,8 @@ class DisplayManager:
                 palette.append(0)
 
             palette_image.putpalette(palette)
-            logger.info(f"Created extended palette with {len(extended_palette)} color variations (LAB-optimized)")
+            logger.info(f"Created extended palette with {len(extended_palette)} color variations (purple-emphasis, LAB-optimized)")
+            logger.info(f"Palette includes: 6 core colors + red/yellow/green/blue variants + 12 purple/magenta variants + 7 grays")
 
             # Step 5: Quantize with LAB-aware Floyd-Steinberg dithering
             # LAB color space provides perceptually uniform distance metric
