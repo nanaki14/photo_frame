@@ -402,17 +402,29 @@ class DisplayManager:
             sample_pixel = optimized_image.getpixel((10, 10))
             logger.info(f"BEFORE getbuffer() - Sample pixel at (10,10): {sample_pixel}")
 
+            # CRITICAL: Pass the 6-color mapped image directly to getbuffer()
+            # Don't re-quantize - the colors are already mapped to the 6 core colors
+            logger.info("Using direct 6-color mapped image for display")
+            display_image = optimized_image
+
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
+
+            # DIAGNOSTIC: Save image before getbuffer()
+            display_image.save("/tmp/07_before_getbuffer.png")
+            logger.info("Saved diagnostic: /tmp/07_before_getbuffer.png")
 
             # Record start time for performance monitoring
             start_time = time.time()
 
             # Use official Waveshare method: getbuffer() + display()
-            # getbuffer() converts the RGB image to the display's internal buffer format
-            # CRITICAL: This is where color loss might happen if getbuffer() does its own quantization
-            logger.info("Calling epd.getbuffer() - this may perform additional color reduction")
-            buffer = self.epd.getbuffer(optimized_image)
+            logger.info("Calling epd.getbuffer()...")
+            buffer = self.epd.getbuffer(display_image)
             logger.info(f"Buffer created: size={len(buffer)} bytes")
+
+            # DIAGNOSTIC: Check buffer content
+            # Count unique byte values to see if it's really 6 colors or grayscale
+            unique_bytes = len(set(buffer))
+            logger.info(f"Buffer has {unique_bytes} unique byte values")
 
             self.epd.display(buffer)
 
@@ -422,6 +434,10 @@ class DisplayManager:
 
             logger.info(f"Image displayed successfully in {display_time:.1f} seconds")
             logger.info(f"Successfully displayed image: {image_path}")
+
+            # DIAGNOSTIC: Check what was actually sent to display
+            logger.info(f"Buffer sent to display: {len(buffer)} bytes")
+            logger.info(f"First 100 bytes of buffer: {buffer[:100]}")
 
             return True
 
