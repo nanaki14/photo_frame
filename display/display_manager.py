@@ -347,10 +347,8 @@ class DisplayManager:
             # Save diagnostic images
             final_image.save("/tmp/05_after_dithering.png")
             logger.info("Saved diagnostic: /tmp/05_after_dithering.png")
-
-            # Also save quantized image to see actual palette usage
-            quantized_image.save("/tmp/06_quantized_indexed.png")
-            logger.info("Saved diagnostic: /tmp/06_quantized_indexed.png")
+            final_image.save("/tmp/06_final_6color_mapped.png")
+            logger.info("Saved diagnostic: /tmp/06_final_6color_mapped.png")
 
             # CRITICAL: Log pixel colors to verify color information is preserved
             sample_pixels = [
@@ -361,7 +359,7 @@ class DisplayManager:
             logger.info(f"Final image pixel samples: {sample_pixels}")
 
             logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
-            logger.info("Color enhancement complete: aggressive saturation (2.5x), contrast (1.8x), Floyd-Steinberg dithering")
+            logger.info("Color enhancement complete: direct 6-color nearest-neighbor mapping")
             return final_image
             
         except Exception as e:
