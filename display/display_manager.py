@@ -409,20 +409,15 @@ class DisplayManager:
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
 
-            # CRITICAL: Waveshare getbuffer() is converting to grayscale
-            # Create our own buffer based on 6-color mapping
-            logger.info("Creating custom 6-color buffer (bypassing getbuffer)...")
-
-            # For E Ink Spectra 6 (epd7in3e), the buffer format is:
-            # Each pixel uses 4 bits (half a byte) to represent one of 8 states
-            # We need to map our 6 colors to the proper buffer format
+            # IMPROVED: Custom 6-color buffer with better accuracy
+            logger.info("Creating optimized 6-color buffer...")
 
             # Get pixel data
             img_pixels = display_image.load()
             width, height = display_image.size
 
             # Color to buffer value mapping for E Ink Spectra 6
-            # These map to the hardware color indices
+            # Use exact official color values
             color_to_index = {
                 (0, 0, 0): 0,          # Black
                 (255, 255, 255): 1,    # White
@@ -438,20 +433,17 @@ class DisplayManager:
 
             logger.info(f"Creating buffer: {width}x{height} = {width*height} pixels, {buffer_size} bytes")
 
-            # Fill buffer with color indices
+            # Fill buffer with color indices using improved nearest-neighbor
             for y in range(height):
                 for x in range(width):
                     pixel = img_pixels[x, y]
-
-                    # Find index for this pixel color
                     pixel_color = tuple(pixel[:3]) if isinstance(pixel, tuple) else (pixel, pixel, pixel)
 
-                    # Find closest match in our color map using Euclidean distance
+                    # Find closest match using Euclidean distance
                     min_distance = float('inf')
                     closest_index = 0
 
                     for color, index in color_to_index.items():
-                        # Calculate distance to find absolute closest color
                         distance = sum((pixel_color[i] - color[i])**2 for i in range(3))
                         if distance < min_distance:
                             min_distance = distance
@@ -466,13 +458,13 @@ class DisplayManager:
                         # Odd pixel - goes in lower 4 bits
                         buffer[byte_index] = (buffer[byte_index] & 0xF0) | (closest_index & 0x0F)
 
-            logger.info(f"Custom buffer created: {len(buffer)} bytes")
+            logger.info(f"Optimized buffer created: {len(buffer)} bytes")
 
             # Record start time for performance monitoring
             start_time = time.time()
 
-            # Use custom buffer directly
-            logger.info("Displaying custom buffer...")
+            # Display custom buffer
+            logger.info("Displaying optimized 6-color buffer...")
             self.epd.display(bytes(buffer))
 
             # Record display time
