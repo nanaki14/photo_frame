@@ -50,8 +50,8 @@ The color optimization is implemented as a three-stage pipeline with LAB color s
    - Preserves color information without compression artifacts
    - Maintains RGB format throughout
 
-### Stage 2: Display Manager - LAB Color Space Processing (display/display_manager.py)
-**Purpose**: Convert RGB to perceptually uniform LAB color space for superior color preservation
+### Stage 2: Display Manager - Direct Color Enhancement (display/display_manager.py)
+**Purpose**: Aggressively enhance colors and apply dithering for 6-color display conversion
 
 **Processing Steps**:
 
@@ -61,89 +61,96 @@ The color optimization is implemented as a three-stage pipeline with LAB color s
    - Center on white background
    - Optimize for low-memory Pi Zero systems
 
-2. **LAB Color Space Conversion** (Advanced Color Processing):
+2. **Direct Color Enhancement** (Aggressive but Simple):
 
-   LAB color space separates color into three independent channels:
-   - **L (Luminance)**: Brightness information (0-100)
-   - **a (Red-Green axis)**: Red to green (-127 to +127)
-   - **b (Yellow-Blue axis)**: Yellow to blue (-127 to +127)
+   The display manager applies three direct enhancements using PIL ImageEnhance:
 
-   **Key Advantage**: LAB is perceptually uniform - equal changes in L, a, b values correspond to equal perceived color differences.
-
-   a. **RGB to LAB Conversion** (Full pipeline):
+   a. **Saturation Boost (250%)**:
    ```python
-   # Step 1: Apply gamma correction (sRGB)
-   # Step 2: Transform RGB → XYZ (using D65 reference white)
-   # Step 3: Transform XYZ → LAB (perceptually uniform)
+   enhancer = ImageEnhance.Color(background)
+   background = enhancer.enhance(2.5)  # 250% saturation
    ```
+   - Dramatically increases color intensity
+   - Compensates for 6-color palette limitation
+   - Makes colors more distinct and visible
 
-   b. **Chrominance Enhancement** (Separate from luminance):
+   b. **Contrast Enhancement (80%)**:
    ```python
-   img_lab[..., 1] *= 1.4  # Boost a channel (red-green) by 40%
-   img_lab[..., 2] *= 1.4  # Boost b channel (yellow-blue) by 40%
-   img_lab[..., 0] *= 1.1  # Boost L channel (luminance) by 10%
+   enhancer = ImageEnhance.Contrast(background)
+   background = enhancer.enhance(1.8)  # 80% contrast boost
    ```
+   - Separates colors and tones more clearly
+   - Creates sharper boundaries between color regions
+   - Helps prevent color blending into gray
 
-   **Why This Works**:
-   - Chrominance (color) boosted independently from luminance (brightness)
-   - Prevents colors from being washed out by brightness changes
-   - Preserves natural appearance while maximizing color saturation
-   - 40% boost provides substantial color improvement without being oversaturated
-
-   c. **LAB back to RGB Conversion**:
+   c. **Brightness Adjustment (10%)**:
    ```python
-   # Step 1: Transform LAB → XYZ
-   # Step 2: Transform XYZ → RGB (using inverse transformation)
-   # Step 3: Apply reverse gamma correction (sRGB)
+   enhancer = ImageEnhance.Brightness(background)
+   background = enhancer.enhance(1.1)  # 10% brightness boost
    ```
+   - Provides slight brightness lift for visibility
+   - Prevents overly dark results
+   - Maintains natural appearance
 
-3. **Extended Color Palette with Purple Emphasis** (Now includes 40+ color variations):
-   - 6 core colors (hardware-optimized)
-   - Red variants: 4 colors (dark to light)
-   - Yellow variants: 3 colors (dark to light)
-   - Green variants: 3 colors (dark to light)
-   - Blue variants: 3 colors (dark to light)
-   - **★ Purple/Magenta variants: 12 colors (NEW - critical for color fidelity)**
-     - Pure Purple, Medium Purple, Light Purple, Very Light Purple
-     - Deep Purple, Blue-Purple, Red-Purple
-     - Pure Magenta, Bright Magenta, Light Magenta variations
-   - Neutral grays: 7 colors (for smooth transitions)
+   **Why This Approach**:
+   - Simple and direct enhancement without complex color space conversion
+   - Avoids floating-point precision errors from multi-step conversions
+   - PIL ImageEnhance operations are optimized and fast
+   - Works reliably across different image types
 
-   **Why Purple Emphasis?**
-   - E-ink displays struggle to show purple (requires both red AND blue)
-   - Without purple in palette, purple images appear gray
-   - 12 purple variants enable dithering to create various purple shades
-   - Total: 40+ colors provide comprehensive color coverage
+3. **Pure Core Color Palette** (6 hardware colors):
 
-3. **Extended Palette Creation**:
+   The system uses pure, fully-saturated core colors for maximum visibility:
+   - **Black**: (0, 0, 0)
+   - **White**: (255, 255, 255)
+   - **Red**: (255, 0, 0) - Pure red for maximum saturation
+   - **Yellow**: (255, 255, 0) - Pure yellow for maximum saturation
+   - **Green**: (0, 200, 0) - Bright green for visibility
+   - **Blue**: (0, 0, 255) - Pure blue for maximum saturation
 
-   Instead of using only the 6 core colors for dithering, we create an extended palette with 17 colors:
+   **Why Pure Colors?**
+   - Maximum color signal strength for quantization
+   - Pure RGB values provide strongest input to dithering algorithm
+   - Adjusted/dampened colors (like 191,0,0) reduce available saturation
+   - E-ink hardware mapping handles pure colors more consistently
 
-   **Core Colors (6)** - Optimized for E Ink Hardware:
-   - Black: (0, 0, 0)
-   - White: (255, 255, 255)
-   - Red: (191, 0, 0) - Darker, maps better to hardware capabilities
-   - Yellow: (255, 243, 56) - Adjusted from pure yellow for better visibility
-   - Green: (67, 138, 28) - Dark green, more visible on e-ink displays
-   - Blue: (100, 64, 255) - Adjusted for better color rendering
+4. **Extended Color Palette with Complementary Colors** (30+ color variations):
 
-   **Extended Colors (11)**:
-   - Dark variants (4): Dark Red, Dark Yellow, Dark Green, Dark Blue
-   - Light variants (4): Light Red, Light Yellow, Light Green, Light Blue
-   - Neutral grays (3): Dark Gray, Medium Gray, Light Gray
+   Beyond the 6 core colors, the palette includes carefully selected intermediate and complementary colors:
 
-   **Benefit**: The dithering algorithm has more intermediate colors to choose from, creating better gradation and smoother color transitions.
+   **Color Spectrum Variants**:
+   - Red spectrum: Dark Red (200,0,0), Pure Red (255,0,0), Light Red (255,80,80)
+   - Yellow spectrum: Dark Yellow (200,200,0), Pure Yellow (255,255,0), Light Yellow (255,255,100)
+   - Green spectrum: Medium Green (0,150,0), Bright Green (0,200,0), Light Green (100,255,100)
+   - Blue spectrum: Dark Blue (0,0,200), Pure Blue (0,0,255), Light Blue (100,100,255)
 
-4. **Floyd-Steinberg Dithering**:
+   **Complementary Colors** (Critical for dithering):
+   - Cyan (0,200,200), Bright Cyan (0,255,255)
+   - Magenta (200,0,200), Bright Magenta (255,0,255)
+   - Purple (160,0,160), Light Purple (200,100,200)
+   - Orange (255,150,0), Light Orange (255,200,0)
+   - Pink (255,150,150), Light Pink (255,200,200)
+
+   **Neutral Colors**:
+   - Grays: Dark (50,50,50), Medium (100,100,100), Light (150,150,150), Very Light (200,200,200)
+
+   **Why This Palette Design?**
+   - Spectral coverage allows dithering to create intermediate shades
+   - Complementary colors enable color mixing through pixel patterns
+   - Extended palette gives Floyd-Steinberg dithering more options
+   - Total 30+ colors provides comprehensive color coverage
+
+5. **Floyd-Steinberg Dithering**:
    ```python
    quantized_image = background.quantize(
        palette=palette_image,
-       dither=Image.FLOYDSTEINBERG
+       dither=Image.FLOYDSTEINBERG  # Floyd-Steinberg error diffusion
    )
    ```
-   - Uses error diffusion algorithm to distribute color errors
-   - Creates pseudo-colors through pixel-level dithering
-   - Works with extended palette for better color representation
+   - Uses error diffusion algorithm to distribute color quantization errors
+   - Creates pseudo-colors through neighboring pixel patterns
+   - Extended palette enables better color interpolation
+   - Produces smoother color transitions than basic palette quantization
 
 ## Color Processing Pipeline Diagram
 
@@ -163,93 +170,60 @@ Optimized RGB Image (JPEG)
     ├─ Load & Resize (800×480)
     ├─ Center on white background
     │
-    ├─ [LAB COLOR SPACE PROCESSING - NEW]
-    │  ├─ Convert RGB → LAB (perceptually uniform)
-    │  ├─ Boost a channel (red-green) by 40%
-    │  ├─ Boost b channel (yellow-blue) by 40%
-    │  ├─ Boost L channel (luminance) by 10%
-    │  └─ Convert LAB → RGB
+    ├─ [DIRECT COLOR ENHANCEMENT]
+    │  ├─ Saturation Boost (250%)
+    │  ├─ Contrast Enhancement (80%)
+    │  └─ Brightness Adjustment (10%)
     │
-    ├─ Extended Palette (31+ colors)
-    │  ├─ 6 core colors (hardware-optimized)
-    │  ├─ 4 dark variants
-    │  ├─ 4 light variants
-    │  ├─ 4 medium variants
-    │  └─ 7 neutral grays
+    ├─ Extended Palette (30+ colors)
+    │  ├─ 6 pure core colors (Black, White, Red, Yellow, Green, Blue)
+    │  ├─ Spectrum variants (dark/medium/light versions)
+    │  ├─ Complementary colors (Cyan, Magenta, Purple, Orange, Pink)
+    │  └─ Neutral grays (for smooth transitions)
     │
-    ├─ Floyd-Steinberg Dithering (LAB-aware)
+    ├─ Floyd-Steinberg Dithering
     └─ Convert to display buffer
     ↓
-6-Color E Ink Display Output (Superior Color Fidelity)
+6-Color E Ink Display Output (Vibrant Colors via Dithering)
 ```
 
-**Key Improvement**: LAB color space processing ensures that color (chrominance) is enhanced independently from brightness (luminance), resulting in vibrant colors while maintaining natural appearance.
+**Key Approach**: Simple, direct color enhancement combined with extended palette and dithering. This avoids complex color space conversions that can introduce floating-point precision errors, while still providing aggressive color enhancement through PIL's optimized ImageEnhance operations.
 
 ## Technical Details
 
-### LAB Color Space Implementation
+### Color Enhancement Strategy
 
-The LAB conversion is implemented using the standard CIE LAB color space with D65 illuminant:
+After extensive testing with LAB color space processing, we found that complex multi-step color conversions (RGB→Gamma→XYZ→LAB→XYZ→Gamma→RGB) could introduce floating-point precision errors that resulted in color loss.
 
-**RGB → LAB Conversion Pipeline** (display_manager.py):
+**The Simplified Approach**:
+
+Instead of complex color space transformations, the system now uses PIL's optimized ImageEnhance operations, which are:
+1. **Fast**: Implemented in C, not Python
+2. **Reliable**: Well-tested standard library operations
+3. **Precision-safe**: No multi-step floating-point conversions
+4. **Effective**: Aggressive parameters (2.5x saturation, 1.8x contrast) compensate for 6-color limitation
+
+**PIL ImageEnhance Operations** (display_manager.py):
 ```python
-# Step 1: Apply sRGB gamma correction
-# Converts linear light values to perceptual space
-mask = img_array > 0.04045
-img_linear = where(mask, ((img_array + 0.055) / 1.055)^2.4, img_array / 12.92)
+# Step 1: Saturation Enhancement
+enhancer = ImageEnhance.Color(image)
+enhanced = enhancer.enhance(2.5)  # 250% saturation
 
-# Step 2: RGB → XYZ transformation (using D65 reference white)
-# Linear transformation using standard matrix
-transform_matrix = [
-    [0.4124, 0.3576, 0.1805],
-    [0.2126, 0.7152, 0.0722],
-    [0.0193, 0.1192, 0.9505]
-]
+# Step 2: Contrast Enhancement
+enhancer = ImageEnhance.Contrast(enhanced)
+enhanced = enhancer.enhance(1.8)  # 80% contrast boost
 
-# Step 3: XYZ → LAB transformation
-# Nonlinear function to create perceptually uniform space
-L = 116 * f(Y/Yn) - 16     # Luminance (0-100)
-a = 500 * (f(X/Xn) - f(Y/Yn))   # Red-Green (-127 to 127)
-b = 200 * (f(Y/Yn) - f(Z/Zn))   # Yellow-Blue (-127 to 127)
+# Step 3: Brightness Adjustment
+enhancer = ImageEnhance.Brightness(enhanced)
+enhanced = enhancer.enhance(1.1)  # 10% brightness boost
 ```
 
-**Chrominance Boost with Purple Emphasis** (display_manager.py, lines 310-319):
-```python
-# Aggressive boost with purple emphasis
-# Purple is (Red + Blue) - needs both a and b channel boost
-a_channel *= 1.6   # 60% boost for red-green axis (more aggressive)
-b_channel *= 1.8   # 80% boost for yellow-blue axis (maximum for blue/purple)
-L_channel *= 1.15  # 15% boost for luminance (improved contrast)
-
-# Result: Purple and magenta colors are maximally enhanced
-# This ensures purple appears vibrant instead of gray
-```
-
-**LAB → RGB Conversion** (Reverse pipeline):
-```python
-# Step 1: Inverse XYZ transformation
-# Step 2: Convert XYZ → RGB
-# Step 3: Apply reverse sRGB gamma correction
-```
-
-### Why LAB Color Space Processing Works
-
-The original RGB approach had a critical limitation: it couldn't distinguish between color information and brightness information. When colors appeared washed out and gray, it was because:
-
-1. **RGB Enhancement Affected Both Channels**: Increasing saturation in RGB space affects brightness
-2. **Lost Color Information**: Brightness changes masked color differences
-3. **No Perceptual Uniformity**: Equal RGB changes don't equal equal perceived color changes
-
-**LAB Solution**:
-- **L channel (Luminance)**: Controls brightness (0-100)
-- **a channel (Red-Green)**: Controls color hue (-127 to +127)
-- **b channel (Yellow-Blue)**: Controls color hue (-127 to +127)
-
-By boosting a and b channels by 40% while only boosting L by 10%, we get:
-- ✅ Vibrant, saturated colors
-- ✅ Natural brightness levels
-- ✅ Preserved color information
-- ✅ No washed-out appearance
+**Why This Works Better**:
+- **No color space conversion overhead**: Works directly in RGB
+- **Avoids precision loss**: No gamma correction, XYZ matrix multiplications, or LAB transformation chains
+- **Simple and debuggable**: Three straightforward enhancement operations
+- **Aggressive parameters**: 2.5x saturation is very aggressive and effectively compensates for limited palette
+- **Hardware-aligned**: Different e-ink devices may handle converted color spaces inconsistently
 
 ### Why Extended Palette Helps
 

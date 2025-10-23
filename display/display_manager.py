@@ -246,179 +246,99 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply E Ink Spectra 6 (6-color) optimizations with LAB color space processing
-            # Strategy: Use perceptually uniform LAB color space for better color preservation
-            logger.info("Optimizing image for E Ink Spectra 6 using LAB color space processing")
+            # Apply E Ink Spectra 6 (6-color) optimizations with aggressive color enhancement
+            # Strategy: Simple, direct color enhancement without LAB conversion
+            logger.info("Optimizing image for E Ink Spectra 6 with aggressive color enhancement")
 
-            # Step 1: Convert to LAB color space for perceptually accurate processing
-            # LAB color space separates luminance (L) from chrominance (a,b)
-            # This allows us to enhance color information independently from brightness
-            logger.info("Step 1: Converting to LAB color space for perceptual processing")
+            # Step 1: Apply simple but aggressive color enhancement
+            # Avoid complex LAB conversion that may lose color information
+            logger.info("Step 1: Applying direct color enhancement")
 
             from PIL import ImageEnhance
-            import numpy as np
 
-            # Convert PIL image to numpy array for LAB processing
-            img_array = np.array(background, dtype=np.float32)
+            # Enhance saturation AGGRESSIVELY to compensate for 6-color limitation
+            # Start with maximum saturation boost
+            enhancer = ImageEnhance.Color(background)
+            background = enhancer.enhance(2.5)  # 250% saturation (maximum boost)
+            logger.info("Color saturation enhanced by 250%")
 
-            # Normalize to 0-1 range
-            img_array = img_array / 255.0
+            # Enhance contrast to separate colors
+            enhancer = ImageEnhance.Contrast(background)
+            background = enhancer.enhance(1.8)  # 80% contrast boost
+            logger.info("Contrast enhanced by 80%")
 
-            # Convert RGB to LAB color space manually for better control
-            # Step 1a: RGB to XYZ
-            img_xyz = np.zeros_like(img_array)
+            # Enhance brightness slightly for visibility
+            enhancer = ImageEnhance.Brightness(background)
+            background = enhancer.enhance(1.1)  # 10% brightness boost
+            logger.info("Brightness enhanced by 10%")
 
-            # Apply gamma correction (sRGB)
-            mask = img_array > 0.04045
-            img_linear = np.where(mask, np.power((img_array + 0.055) / 1.055, 2.4), img_array / 12.92)
+            # Step 2: Create extended color palette
+            # Use more aggressive and diverse colors to ensure proper quantization
+            logger.info("Step 2: Creating extended color palette with color-focused variants")
 
-            # Transformation matrix RGB -> XYZ (D65 illuminant)
-            transform_matrix = np.array([
-                [0.4124, 0.3576, 0.1805],
-                [0.2126, 0.7152, 0.0722],
-                [0.0193, 0.1192, 0.9505]
-            ])
-
-            # Apply transformation
-            img_xyz = np.dot(img_linear, transform_matrix.T)
-
-            # Step 1b: XYZ to LAB
-            # Normalize by D65 reference white
-            ref_white = np.array([0.95047, 1.00000, 1.08883])
-            img_xyz_norm = img_xyz / ref_white
-
-            # Apply nonlinear function
-            delta = 6.0 / 29.0
-            mask = img_xyz_norm > delta**3
-            img_f = np.where(mask, np.power(img_xyz_norm, 1.0/3.0), img_xyz_norm / (3 * delta**2) + 4.0/29.0)
-
-            # Convert to LAB
-            img_lab = np.zeros_like(img_array)
-            img_lab[..., 0] = 116 * img_f[..., 1] - 16  # L: 0-100
-            img_lab[..., 1] = 500 * (img_f[..., 0] - img_f[..., 1])  # a: -127 to 127
-            img_lab[..., 2] = 200 * (img_f[..., 1] - img_f[..., 2])  # b: -127 to 127
-
-            logger.info("Converted to LAB color space")
-
-            # Step 2: Enhance color channels in LAB space with purple emphasis
-            # Boost a and b channels (chrominance) to increase color saturation
-            # Extra emphasis on b channel to enhance blue/purple colors
-            # Keep L channel (luminance) relatively unchanged for natural brightness
-            logger.info("Step 2: Enhancing chrominance (color) channels in LAB space with purple emphasis")
-
-            # Aggressive boosting of both chrominance channels to maximize color visibility
-            # a channel (red-green axis): 60% boost
-            img_lab[..., 1] = np.clip(img_lab[..., 1] * 1.6, -127, 127)
-
-            # b channel (yellow-blue axis): 80% boost (more aggressive for purple/blue)
-            img_lab[..., 2] = np.clip(img_lab[..., 2] * 1.8, -127, 127)
-
-            # Enhance luminance for better overall contrast and visibility
-            img_lab[..., 0] = np.clip(img_lab[..., 0] * 1.15, 0, 100)
-
-            logger.info("Chrominance enhanced: a-channel +60%, b-channel +80% (purple emphasis), luminance +15%")
-
-            # Step 3: Convert back to RGB
-            logger.info("Step 3: Converting back to RGB color space")
-
-            # LAB to XYZ
-            img_f = np.zeros_like(img_array)
-            img_f[..., 1] = (img_lab[..., 0] + 16) / 116
-            img_f[..., 0] = img_lab[..., 1] / 500 + img_f[..., 1]
-            img_f[..., 2] = img_f[..., 1] - img_lab[..., 2] / 200
-
-            # Apply inverse nonlinear function
-            mask = img_f > delta
-            img_xyz_norm = np.where(mask, np.power(img_f, 3.0), 3 * delta**2 * (img_f - 4.0/29.0))
-
-            img_xyz = img_xyz_norm * ref_white
-
-            # XYZ to RGB
-            inv_transform = np.array([
-                [3.2406, -1.5372, -0.4986],
-                [-0.9689, 1.8758, 0.0415],
-                [0.0557, -0.2040, 1.0570]
-            ])
-
-            img_linear = np.dot(img_xyz, inv_transform.T)
-
-            # Apply reverse gamma correction
-            mask = img_linear > 0.0031308
-            img_srgb = np.where(mask, 1.055 * np.power(img_linear, 1.0/2.4) - 0.055, 12.92 * img_linear)
-
-            # Clip to valid range and convert back to 8-bit
-            img_srgb = np.clip(img_srgb * 255, 0, 255).astype(np.uint8)
-
-            background = Image.fromarray(img_srgb, mode='RGB')
-            logger.info("Converted back to RGB, LAB processing complete")
-
-            # Step 4: Create extended color palette with LAB-based color mapping
-            # This helps the dithering algorithm have more options
-            logger.info("Step 4: Creating extended color palette optimized for LAB color space")
-
-            # E Ink Spectra 6 core colors (optimized for actual display output)
-            # Based on reference implementation (EPF/app.py) which shows these values
-            # map better to actual hardware color rendering than pure RGB values
+            # E Ink Spectra 6 core colors - use PURE colors for maximum visibility
+            # Previously adjusted colors lost saturation - reverting to pure for better output
             core_colors = [
                 (0, 0, 0),          # Black
                 (255, 255, 255),    # White
-                (191, 0, 0),        # Red (darker, maps better to hardware)
-                (255, 243, 56),     # Yellow (adjusted, maps better)
-                (67, 138, 28),      # Green (darker, more visible on e-ink)
-                (100, 64, 255),     # Blue (adjusted for better display)
+                (255, 0, 0),        # Red (pure - maximum saturation)
+                (255, 255, 0),      # Yellow (pure - maximum saturation)
+                (0, 200, 0),        # Green (bright, more visible)
+                (0, 0, 255),        # Blue (pure - maximum saturation)
             ]
 
             # Create extended palette with intermediate shades
             # This gives the dithering algorithm more colors to work with
             extended_palette = list(core_colors)
 
-            # Add purple-heavy palette variants for better color representation
-            # Emphasis on purple/magenta since e-ink displays struggle with these colors
+            # Color-focused palette variants
+            # Prioritize pure, saturated colors and their intermediate shades
             color_variations = [
-                # Red variants
-                (96, 0, 0),         # Dark Red
-                (128, 64, 64),      # Medium Dark Red
-                (223, 128, 128),    # Medium Red
-                (255, 180, 180),    # Light Red
+                # Red spectrum (pure to light)
+                (200, 0, 0),        # Darker Red
+                (255, 0, 0),        # Pure Red (duplicate for weight)
+                (255, 80, 80),      # Light Red
 
-                # Yellow variants
-                (128, 122, 28),     # Dark Yellow
-                (192, 180, 100),    # Medium Yellow
-                (255, 249, 156),    # Light Yellow
+                # Yellow spectrum (pure to light)
+                (200, 200, 0),      # Dark Yellow
+                (255, 255, 0),      # Pure Yellow (duplicate for weight)
+                (255, 255, 100),    # Light Yellow
 
-                # Green variants
-                (34, 69, 14),       # Dark Green
-                (100, 180, 64),     # Medium Green
-                (150, 196, 142),    # Light Green
+                # Green spectrum (pure to light)
+                (0, 150, 0),        # Medium Green
+                (0, 200, 0),        # Bright Green
+                (100, 255, 100),    # Light Green
 
-                # Blue variants
-                (50, 32, 128),      # Dark Blue
-                (100, 100, 200),    # Medium Blue
-                (177, 160, 255),    # Light Blue
+                # Blue spectrum (pure to light)
+                (0, 0, 200),        # Dark Blue
+                (0, 0, 255),        # Pure Blue (duplicate for weight)
+                (100, 100, 255),    # Light Blue
 
-                # ★ PURPLE/MAGENTA VARIANTS (newly added - critical for color fidelity)
-                (128, 0, 128),      # Pure Purple
-                (150, 50, 150),     # Medium Purple
-                (180, 100, 180),    # Light Purple
-                (200, 120, 200),    # Very Light Purple
+                # Cyan (Blue + Green)
+                (0, 200, 200),      # Cyan
+                (0, 255, 255),      # Bright Cyan
+
+                # Magenta (Red + Blue)
+                (200, 0, 200),      # Magenta
+                (255, 0, 255),      # Bright Magenta
+
+                # Purple (Red + Blue, more red)
                 (160, 0, 160),      # Deep Purple
-                (100, 0, 150),      # Blue-Purple
-                (150, 0, 100),      # Red-Purple
+                (200, 100, 200),    # Light Purple
 
-                # Magenta variants (Red + Blue)
-                (150, 0, 150),      # Magenta
-                (200, 0, 200),      # Bright Magenta
-                (255, 0, 255),      # Pure Magenta
-                (200, 100, 200),    # Light Magenta
+                # Orange (Red + Yellow)
+                (255, 150, 0),      # Orange
+                (255, 200, 0),      # Light Orange
 
-                # Neutral grays for smooth transitions
-                (32, 32, 32),       # Very Dark Gray
-                (64, 64, 64),       # Dark Gray
-                (96, 96, 96),       # Medium Dark Gray
-                (128, 128, 128),    # Medium Gray
-                (160, 160, 160),    # Medium Light Gray
-                (192, 192, 192),    # Light Gray
-                (224, 224, 224),    # Very Light Gray
+                # Pink (Red + White)
+                (255, 150, 150),    # Pink
+                (255, 200, 200),    # Light Pink
+
+                # Neutral grays for transitions
+                (50, 50, 50),       # Dark Gray
+                (100, 100, 100),    # Medium Gray
+                (150, 150, 150),    # Light Gray
+                (200, 200, 200),    # Very Light Gray
             ]
 
             extended_palette.extend(color_variations)
@@ -435,24 +355,25 @@ class DisplayManager:
                 palette.append(0)
 
             palette_image.putpalette(palette)
-            logger.info(f"Created extended palette with {len(extended_palette)} color variations (purple-emphasis, LAB-optimized)")
-            logger.info(f"Palette includes: 6 core colors + red/yellow/green/blue variants + 12 purple/magenta variants + 7 grays")
+            logger.info(f"Created extended palette with {len(extended_palette)} color variations (color-focused spectrum)")
+            logger.info(f"Palette includes: 6 core colors + red/yellow/green/blue variants + cyan/magenta/purple/orange/pink + 4 grays")
 
-            # Step 5: Quantize with LAB-aware Floyd-Steinberg dithering
-            # LAB color space provides perceptually uniform distance metric
-            logger.info("Step 5: Applying LAB-aware Floyd-Steinberg dithering")
+            # Step 3: Apply Floyd-Steinberg dithering with extended palette
+            # Extended palette enables better color mixing through dithering
+            logger.info("Step 3: Applying Floyd-Steinberg dithering with color-focused palette")
 
-            # Use Likhuan dithering (similar to Floyd-Steinberg but optimized for LAB)
+            # Floyd-Steinberg dithering with extended color palette
+            # Creates pseudo-colors through error diffusion across pixel neighborhoods
             quantized_image = background.quantize(
                 palette=palette_image,
-                dither=Image.FLOYDSTEINBERG  # Floyd-Steinberg with extended palette
+                dither=Image.FLOYDSTEINBERG  # Floyd-Steinberg error diffusion
             )
 
             # Convert back to RGB for display
             final_image = quantized_image.convert('RGB')
 
             logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
-            logger.info("Enhanced color range applied with extended palette and dithering")
+            logger.info("Color enhancement complete: aggressive saturation (2.5x), contrast (1.8x), Floyd-Steinberg dithering")
             return final_image
             
         except Exception as e:
