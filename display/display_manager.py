@@ -246,13 +246,33 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply E Ink Spectra 6 (6-color) optimizations using official Waveshare method
-            # Based on: https://github.com/waveshareteam/e-Paper/.../epd_7in3e_test.py
-            logger.info("Optimizing image for E Ink Spectra 6 with Floyd-Steinberg dithering")
+            # Apply E Ink Spectra 6 (6-color) optimizations with enhanced color range
+            # Strategy: Pre-process image to maximize color visibility within 6-color palette
+            logger.info("Optimizing image for E Ink Spectra 6 with enhanced color range")
 
-            # Official E Ink Spectra 6 color palette
-            # These are the 6 colors supported by HAT (E)
-            palette_colors = [
+            # Step 1: Enhance color separation before quantization
+            # This helps maximize the use of all 6 colors
+            logger.info("Step 1: Enhancing color separation and contrast")
+
+            # Convert to PIL ImageEnhance for better control
+            from PIL import ImageEnhance
+
+            # Enhance contrast significantly to separate colors
+            enhancer = ImageEnhance.Contrast(background)
+            background = enhancer.enhance(1.5)  # 50% contrast boost
+            logger.info("Contrast enhanced by 50%")
+
+            # Enhance color saturation to make colors more vivid
+            enhancer = ImageEnhance.Color(background)
+            background = enhancer.enhance(1.5)  # 50% saturation boost
+            logger.info("Color saturation enhanced by 50%")
+
+            # Step 2: Create extended color palette with intermediate colors
+            # This helps the dithering algorithm have more options
+            logger.info("Step 2: Creating extended color palette for better dithering")
+
+            # Official E Ink Spectra 6 core colors
+            core_colors = [
                 (0, 0, 0),        # Black
                 (255, 255, 255),  # White
                 (255, 0, 0),      # Red
@@ -261,36 +281,56 @@ class DisplayManager:
                 (0, 0, 255),      # Blue
             ]
 
-            # Create an 8-bit palette image for quantization
-            # This follows the official Waveshare example exactly
-            logger.info("Creating Spectra 6 color palette (8-bit)")
+            # Create extended palette with intermediate shades
+            # This gives the dithering algorithm more colors to work with
+            extended_palette = list(core_colors)
+
+            # Add darker and lighter variants for better gradation
+            color_variations = [
+                # Darker variants
+                (64, 0, 0),       # Dark Red
+                (128, 128, 0),    # Dark Yellow
+                (0, 64, 0),       # Dark Green
+                (0, 0, 128),      # Dark Blue
+                # Lighter variants
+                (255, 128, 128),  # Light Red
+                (255, 255, 128),  # Light Yellow
+                (128, 255, 128),  # Light Green
+                (128, 128, 255),  # Light Blue
+                # Neutral grays
+                (64, 64, 64),     # Dark Gray
+                (128, 128, 128),  # Medium Gray
+                (192, 192, 192),  # Light Gray
+            ]
+
+            extended_palette.extend(color_variations)
+
+            # Create palette image with extended colors
             palette_image = Image.new('P', (1, 1))
             palette = []
 
-            # Add the 6 Spectra colors to the palette
-            for color in palette_colors:
-                palette.extend(color)  # Each color is 3 bytes (R, G, B)
+            for color in extended_palette[:240]:  # Use up to 240 colors (leaving 16 for pure colors)
+                palette.extend(color)
 
-            # Pad palette to 256 colors (768 bytes total)
-            while len(palette) < 768:  # 256 * 3
+            # Pad to 256 colors (768 bytes)
+            while len(palette) < 768:
                 palette.append(0)
 
             palette_image.putpalette(palette)
+            logger.info(f"Created extended palette with {len(extended_palette)} color variations")
 
-            # Quantize image using Floyd-Steinberg dithering
-            # This is the critical step for good color representation
-            logger.info("Quantizing image using Floyd-Steinberg dithering")
+            # Step 3: Quantize with Floyd-Steinberg dithering
+            logger.info("Step 3: Applying Floyd-Steinberg dithering")
             quantized_image = background.quantize(
                 palette=palette_image,
                 dither=Image.FLOYDSTEINBERG
             )
 
             # Convert back to RGB for display
-            # The EPD's getbuffer() expects RGB mode
             final_image = quantized_image.convert('RGB')
 
             logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
-            logger.info("Floyd-Steinberg dithering applied for better color distribution")
+            logger.info("Enhanced color range applied with extended palette and dithering")
             return final_image
             
         except Exception as e:

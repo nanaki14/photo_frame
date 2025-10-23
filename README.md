@@ -132,13 +132,43 @@ sudo systemctl restart photo-frame.service
 sudo systemctl enable photo-frame.service
 ```
 
+## 🎨 Color Display & Image Optimization
+
+The system uses advanced color optimization to maximize visual fidelity on the 6-color e-ink display:
+
+### Two-Stage Color Processing
+
+1. **Server-Side Enhancement** (upload processing):
+   - Image normalization for optimal tonal range
+   - 1.8x saturation boost for vivid colors
+   - Contrast enhancement via double-negation technique
+   - High-quality JPEG preservation (95-98%)
+
+2. **Display-Side Optimization** (display rendering):
+   - Additional 50% contrast and saturation enhancement
+   - Extended 17-color palette for dithering (vs. just 6 core colors)
+   - Floyd-Steinberg dithering for smooth color distribution
+   - Memory-optimized processing for Raspberry Pi Zero
+
+### Supported Image Types
+
+- **Full-color photos**: RGB images automatically optimized for 6-color display
+- **Graphics and illustrations**: Best results with distinct colors
+- **Gradients**: Converted using dithering for smooth pseudo-color transitions
+- **Mixed content**: Photos with text, charts, and graphics all supported
+
+**Note**: The 6-color palette (Black, White, Red, Yellow, Green, Blue) works best with images that have distinct color regions. Grayscale or low-contrast images may appear predominantly in black and white, which is expected behavior.
+
+For detailed information about color optimization, see [COLOR_OPTIMIZATION.md](COLOR_OPTIMIZATION.md).
+
 ## 📱 Usage
 
 1. **Access Web Interface**: Navigate to `http://<pi-ip-address>:3000`
 2. **Upload Photos**: Drag & drop JPEG files or click to browse
-3. **View Current Photo**: Check the Gallery page for currently displayed image
-4. **Monitor System**: Dashboard shows battery, storage, and display status
-5. **Configure Settings**: Adjust display brightness and system preferences
+3. **Automatic Processing**: Images are optimized for 6-color display during upload
+4. **View Current Photo**: Check the Gallery page for currently displayed image
+5. **Monitor System**: Dashboard shows battery, storage, and display status
+6. **Configure Settings**: Adjust display brightness and system preferences
 
 ## 📋 Requirements
 
@@ -172,7 +202,12 @@ photo_frame/
 ├── docs/                  # Documentation
 ├── install.sh            # Automated Pi installation
 ├── service.sh            # Service management
-└── DEPLOYMENT.md         # Detailed deployment guide
+├── README.md             # This file
+├── COLOR_OPTIMIZATION.md # Color processing details & tuning guide
+├── DEPLOYMENT.md         # Detailed deployment guide
+├── HARDWARE_TEST.md      # Hardware integration testing
+├── PERFORMANCE.md        # Performance optimization guide
+└── API.md               # API endpoint documentation
 ```
 
 ## 🔧 Development

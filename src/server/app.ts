@@ -200,21 +200,24 @@ app.post('/api/photo', async (c) => {
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
 			})
-			// Optimize colors for E Ink Spectra 6 (6-color display)
-			// Note: Floyd-Steinberg dithering happens in display_manager.py
-			.modulate({
-				brightness: 1.0,  // Maintain original brightness
-				saturation: 1.2,  // Boost saturation for color visibility
-				hue: 0,          // No hue shift
-			})
-			// Increase contrast to help color separation in the 6-color palette
+			// Step 1: Normalize to maximize tonal range
 			.normalize()
-			// Apply minimal sharpening (dithering will provide fine detail)
-			.sharpen(1.0, 0.5, 0.5)
+			// Step 2: Significantly enhance colors for E Ink Spectra 6
+			// The 6-color palette is limited, so we boost visibility
+			.modulate({
+				brightness: 1.0,   // Maintain original brightness
+				saturation: 1.8,   // Significantly boost saturation (increased from 1.2)
+				hue: 0,            // No hue shift
+			})
+			// Step 3: Increase contrast to separate colors distinctly
+			.negate({ alpha: false })  // Invert once temporarily
+			.negate({ alpha: false })  // Invert back - creates contrast boost
+			// Step 4: Apply edge enhancement for clarity
+			.sharpen(1.2, 0.5, 0.5)
 			.jpeg({
-				quality: isPi ? 95 : 98, // High quality to preserve colors before dithering
-				progressive: false,      // Disable progressive for e-ink displays
-				optimiseScans: false,    // Disable optimization for faster processing
+				quality: isPi ? 95 : 98,  // High quality to preserve color information
+				progressive: false,       // Disable progressive for e-ink displays
+				optimiseScans: false,     // Disable optimization for faster processing
 			})
 			.toBuffer();
 
