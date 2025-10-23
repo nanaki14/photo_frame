@@ -11,6 +11,7 @@ import sys
 import os
 import time
 import logging
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from typing import Optional, Tuple
 
@@ -28,6 +29,16 @@ logger = logging.getLogger(__name__)
 # Waveshare 7.3inch e-Paper display specifications
 DISPLAY_WIDTH = 800
 DISPLAY_HEIGHT = 480
+
+# 6-color palette for E Ink Spectra 6
+PALETTE_6COLOR = np.array([
+    [0, 0, 0],       # Black
+    [255, 255, 255], # White
+    [255, 0, 0],     # Red
+    [255, 255, 0],   # Yellow
+    [0, 128, 0],     # Green
+    [0, 0, 255]      # Blue
+], dtype=np.float32)
 
 # Performance optimizations for Pi Zero 2 WH
 import platform
@@ -47,6 +58,79 @@ def get_system_info():
     }
 
 SYSTEM_INFO = get_system_info()
+
+def find_closest_color(pixel):
+    """
+    ピクセルに最も近いパレット色を見つける
+
+    Args:
+        pixel: RGB値の配列 [R, G, B]
+
+    Returns:
+        最も近い色のインデックスと色
+    """
+    distances = np.sum((PALETTE_6COLOR - pixel) ** 2, axis=1)
+    closest_idx = np.argmin(distances)
+    return closest_idx, PALETTE_6COLOR[closest_idx]
+
+
+def apply_floyd_steinberg_dithering(image: Image.Image) -> Image.Image:
+    """
+    Floyd-Steinberg誤差拡散法でディザリング処理を行う
+
+    Args:
+        image: RGB PIL Image
+
+    Returns:
+        ディザリング処理済みのPIL Image
+    """
+    logger.info("Applying Floyd-Steinberg dithering with 6-color palette...")
+
+    # 画像を配列に変換
+    pixels = np.array(image, dtype=np.float32)
+    height, width = pixels.shape[:2]
+
+    logger.info(f"Dithering image size: {width}x{height}")
+
+    # Floyd-Steinberg誤差拡散
+    for y in range(height):
+        for x in range(width):
+            old_pixel = pixels[y, x].copy()
+
+            # 最も近い色を見つける
+            _, new_pixel = find_closest_color(old_pixel)
+            pixels[y, x] = new_pixel
+
+            # 誤差を計算
+            error = old_pixel - new_pixel
+
+            # 誤差を周囲のピクセルに拡散
+            # Floyd-Steinbergの係数:
+            #     X   7/16
+            # 3/16 5/16 1/16
+
+            if x + 1 < width:
+                pixels[y, x + 1] += error * 7/16
+
+            if y + 1 < height:
+                if x > 0:
+                    pixels[y + 1, x - 1] += error * 3/16
+                pixels[y + 1, x] += error * 5/16
+                if x + 1 < width:
+                    pixels[y + 1, x + 1] += error * 1/16
+
+        # 進捗表示（10%ごと）
+        if (y + 1) % (height // 10) == 0 or y == height - 1:
+            progress = (y + 1) / height * 100
+            logger.info(f"Dithering progress: {progress:.1f}%")
+
+    # 結果をクリップして画像に変換
+    pixels = np.clip(pixels, 0, 255).astype(np.uint8)
+    result_img = Image.fromarray(pixels)
+
+    logger.info("Dithering completed")
+    return result_img
+
 
 class MockEPD:
     """Mock e-Paper display class for development/testing"""
@@ -246,9 +330,8 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Simple approach: NO color modification
-            # Just resize and center - let Waveshare handle everything
-            logger.info("Preparing image for E Ink Spectra 6 display (simple/direct rendering)")
+            # Apply Floyd-Steinberg dithering with 6-color palette
+            logger.info("Preparing image for E Ink Spectra 6 display (with custom dithering)")
 
             # Save original for diagnostics
             background.save("/tmp/01_original_image.png")
@@ -259,7 +342,14 @@ class DisplayManager:
                 background = background.resize((DISPLAY_WIDTH, DISPLAY_HEIGHT), Image.Resampling.LANCZOS)
                 logger.info(f"Resized to {DISPLAY_WIDTH}x{DISPLAY_HEIGHT}")
 
-            final_image = background
+            # Apply Floyd-Steinberg dithering
+            dithered_image = apply_floyd_steinberg_dithering(background)
+
+            # Save dithered image for diagnostics
+            dithered_image.save("/tmp/02_dithered_image.png")
+            logger.info("Saved diagnostic: /tmp/02_dithered_image.png")
+
+            final_image = dithered_image
             logger.info(f"Image ready for Waveshare getbuffer(): size={final_image.size}, mode={final_image.mode}")
             logger.info("NOTE: All color conversion will be handled by Waveshare getbuffer() method")
             return final_image

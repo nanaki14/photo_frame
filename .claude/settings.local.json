@@ -13,7 +13,8 @@
       "WebFetch(domain:github.com)",
       "Bash(cat:*)",
       "Read(//Users/masa/**)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []
