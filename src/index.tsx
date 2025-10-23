@@ -1,12 +1,13 @@
 import app from './server/app';
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const isDevelopment = process.env.NODE_ENV !== 'production';
 
 // Use Bun's built-in server with proper TypeScript support
 export default {
 	port,
 	fetch: app.fetch,
-	development: true,
+	development: isDevelopment,
 };
 
 console.log(

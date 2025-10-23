@@ -101,24 +101,30 @@ install_project_deps() {
 build_frontend() {
     log "Building frontend..."
 
-    if [ -f "package.json" ]; then
-        if command -v bun &>/dev/null; then
-            log "Running: bun run build"
-            bun run build
-        elif command -v npm &>/dev/null; then
-            log "Running: npm run build"
-            npm run build
-        else
-            warn "No build tool found, skipping frontend build"
-            return
-        fi
+    if [ ! -f "package.json" ]; then
+        warn "package.json not found, skipping frontend build"
+        return
+    fi
 
-        # Verify build output
-        if [ -d "src/dist" ]; then
-            log "Frontend build completed successfully"
-        else
-            warn "Frontend build directory not found, but continuing..."
+    if command -v bun &>/dev/null; then
+        log "Running: bun run build"
+        if ! bun run build; then
+            error "Frontend build failed"
         fi
+    elif command -v npm &>/dev/null; then
+        log "Running: npm run build"
+        if ! npm run build; then
+            error "Frontend build failed"
+        fi
+    else
+        error "No build tool found (Bun or npm required)"
+    fi
+
+    # Verify build output (dist directory should exist)
+    if [ -d "dist" ] && [ -f "dist/index.html" ]; then
+        log "Frontend build completed successfully (dist/index.html exists)"
+    else
+        error "Frontend build directory or index.html not found at dist/"
     fi
 }
 

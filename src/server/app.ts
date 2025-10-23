@@ -125,7 +125,7 @@ app.use(
 app.use(
 	'/*',
 	serveStatic({
-		root: './src/dist',
+		root: './dist',
 		index: 'index.html',
 		rewriteRequestPath: (path) => {
 			// Serve index.html for non-API routes, but not for static assets
