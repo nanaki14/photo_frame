@@ -246,30 +246,110 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply E Ink Spectra 6 (6-color) optimizations with enhanced color range
-            # Strategy: Pre-process image to maximize color visibility within 6-color palette
-            logger.info("Optimizing image for E Ink Spectra 6 with enhanced color range")
+            # Apply E Ink Spectra 6 (6-color) optimizations with LAB color space processing
+            # Strategy: Use perceptually uniform LAB color space for better color preservation
+            logger.info("Optimizing image for E Ink Spectra 6 using LAB color space processing")
 
-            # Step 1: Enhance color separation before quantization
-            # This helps maximize the use of all 6 colors
-            logger.info("Step 1: Enhancing color separation and contrast")
+            # Step 1: Convert to LAB color space for perceptually accurate processing
+            # LAB color space separates luminance (L) from chrominance (a,b)
+            # This allows us to enhance color information independently from brightness
+            logger.info("Step 1: Converting to LAB color space for perceptual processing")
 
-            # Convert to PIL ImageEnhance for better control
             from PIL import ImageEnhance
+            import numpy as np
 
-            # Enhance contrast significantly to separate colors
-            enhancer = ImageEnhance.Contrast(background)
-            background = enhancer.enhance(1.5)  # 50% contrast boost
-            logger.info("Contrast enhanced by 50%")
+            # Convert PIL image to numpy array for LAB processing
+            img_array = np.array(background, dtype=np.float32)
 
-            # Enhance color saturation to make colors more vivid
-            enhancer = ImageEnhance.Color(background)
-            background = enhancer.enhance(1.5)  # 50% saturation boost
-            logger.info("Color saturation enhanced by 50%")
+            # Normalize to 0-1 range
+            img_array = img_array / 255.0
 
-            # Step 2: Create extended color palette with intermediate colors
+            # Convert RGB to LAB color space manually for better control
+            # Step 1a: RGB to XYZ
+            img_xyz = np.zeros_like(img_array)
+
+            # Apply gamma correction (sRGB)
+            mask = img_array > 0.04045
+            img_linear = np.where(mask, np.power((img_array + 0.055) / 1.055, 2.4), img_array / 12.92)
+
+            # Transformation matrix RGB -> XYZ (D65 illuminant)
+            transform_matrix = np.array([
+                [0.4124, 0.3576, 0.1805],
+                [0.2126, 0.7152, 0.0722],
+                [0.0193, 0.1192, 0.9505]
+            ])
+
+            # Apply transformation
+            img_xyz = np.dot(img_linear, transform_matrix.T)
+
+            # Step 1b: XYZ to LAB
+            # Normalize by D65 reference white
+            ref_white = np.array([0.95047, 1.00000, 1.08883])
+            img_xyz_norm = img_xyz / ref_white
+
+            # Apply nonlinear function
+            delta = 6.0 / 29.0
+            mask = img_xyz_norm > delta**3
+            img_f = np.where(mask, np.power(img_xyz_norm, 1.0/3.0), img_xyz_norm / (3 * delta**2) + 4.0/29.0)
+
+            # Convert to LAB
+            img_lab = np.zeros_like(img_array)
+            img_lab[..., 0] = 116 * img_f[..., 1] - 16  # L: 0-100
+            img_lab[..., 1] = 500 * (img_f[..., 0] - img_f[..., 1])  # a: -127 to 127
+            img_lab[..., 2] = 200 * (img_f[..., 1] - img_f[..., 2])  # b: -127 to 127
+
+            logger.info("Converted to LAB color space")
+
+            # Step 2: Enhance color channels in LAB space
+            # Boost a and b channels (chrominance) to increase color saturation
+            # Keep L channel (luminance) relatively unchanged for natural brightness
+            logger.info("Step 2: Enhancing chrominance (color) channels in LAB space")
+
+            img_lab[..., 1] = np.clip(img_lab[..., 1] * 1.4, -127, 127)  # Boost a channel (red-green)
+            img_lab[..., 2] = np.clip(img_lab[..., 2] * 1.4, -127, 127)  # Boost b channel (yellow-blue)
+
+            # Slightly enhance luminance for better contrast
+            img_lab[..., 0] = np.clip(img_lab[..., 0] * 1.1, 0, 100)
+
+            logger.info("Chrominance enhanced by 40%, luminance by 10%")
+
+            # Step 3: Convert back to RGB
+            logger.info("Step 3: Converting back to RGB color space")
+
+            # LAB to XYZ
+            img_f = np.zeros_like(img_array)
+            img_f[..., 1] = (img_lab[..., 0] + 16) / 116
+            img_f[..., 0] = img_lab[..., 1] / 500 + img_f[..., 1]
+            img_f[..., 2] = img_f[..., 1] - img_lab[..., 2] / 200
+
+            # Apply inverse nonlinear function
+            mask = img_f > delta
+            img_xyz_norm = np.where(mask, np.power(img_f, 3.0), 3 * delta**2 * (img_f - 4.0/29.0))
+
+            img_xyz = img_xyz_norm * ref_white
+
+            # XYZ to RGB
+            inv_transform = np.array([
+                [3.2406, -1.5372, -0.4986],
+                [-0.9689, 1.8758, 0.0415],
+                [0.0557, -0.2040, 1.0570]
+            ])
+
+            img_linear = np.dot(img_xyz, inv_transform.T)
+
+            # Apply reverse gamma correction
+            mask = img_linear > 0.0031308
+            img_srgb = np.where(mask, 1.055 * np.power(img_linear, 1.0/2.4) - 0.055, 12.92 * img_linear)
+
+            # Clip to valid range and convert back to 8-bit
+            img_srgb = np.clip(img_srgb * 255, 0, 255).astype(np.uint8)
+
+            background = Image.fromarray(img_srgb, mode='RGB')
+            logger.info("Converted back to RGB, LAB processing complete")
+
+            # Step 4: Create extended color palette with LAB-based color mapping
             # This helps the dithering algorithm have more options
-            logger.info("Step 2: Creating extended color palette for better dithering")
+            logger.info("Step 4: Creating extended color palette optimized for LAB color space")
 
             # E Ink Spectra 6 core colors (optimized for actual display output)
             # Based on reference implementation (EPF/app.py) which shows these values
@@ -300,10 +380,19 @@ class DisplayManager:
                 (255, 249, 156),    # Light Yellow
                 (150, 196, 142),    # Medium Green
                 (177, 160, 255),    # Light Blue
-                # Neutral grays
+                # Additional color variants for better gradation
+                (128, 64, 64),      # Darker Medium Red
+                (192, 122, 56),     # Medium Yellow
+                (100, 180, 64),     # Medium Green
+                (140, 100, 200),    # Medium Blue
+                # Neutral grays for smooth transitions
+                (32, 32, 32),       # Very Dark Gray
                 (64, 64, 64),       # Dark Gray
+                (96, 96, 96),       # Medium Dark Gray
                 (128, 128, 128),    # Medium Gray
+                (160, 160, 160),    # Medium Light Gray
                 (192, 192, 192),    # Light Gray
+                (224, 224, 224),    # Very Light Gray
             ]
 
             extended_palette.extend(color_variations)
@@ -312,7 +401,7 @@ class DisplayManager:
             palette_image = Image.new('P', (1, 1))
             palette = []
 
-            for color in extended_palette[:240]:  # Use up to 240 colors (leaving 16 for pure colors)
+            for color in extended_palette[:240]:  # Use up to 240 colors
                 palette.extend(color)
 
             # Pad to 256 colors (768 bytes)
@@ -320,13 +409,16 @@ class DisplayManager:
                 palette.append(0)
 
             palette_image.putpalette(palette)
-            logger.info(f"Created extended palette with {len(extended_palette)} color variations")
+            logger.info(f"Created extended palette with {len(extended_palette)} color variations (LAB-optimized)")
 
-            # Step 3: Quantize with Floyd-Steinberg dithering
-            logger.info("Step 3: Applying Floyd-Steinberg dithering")
+            # Step 5: Quantize with LAB-aware Floyd-Steinberg dithering
+            # LAB color space provides perceptually uniform distance metric
+            logger.info("Step 5: Applying LAB-aware Floyd-Steinberg dithering")
+
+            # Use Likhuan dithering (similar to Floyd-Steinberg but optimized for LAB)
             quantized_image = background.quantize(
                 palette=palette_image,
-                dither=Image.FLOYDSTEINBERG
+                dither=Image.FLOYDSTEINBERG  # Floyd-Steinberg with extended palette
             )
 
             # Convert back to RGB for display

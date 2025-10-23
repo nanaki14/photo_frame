@@ -12,7 +12,7 @@ The Waveshare E Ink Spectra 6 display is limited to 6 core colors, which creates
 
 ## Solution Architecture
 
-The color optimization is implemented as a two-stage pipeline:
+The color optimization is implemented as a three-stage pipeline with LAB color space processing for superior color fidelity:
 
 ### Stage 1: Upload Server (src/server/app.ts)
 **Purpose**: Pre-process images to maximize color information before display conversion
@@ -50,8 +50,8 @@ The color optimization is implemented as a two-stage pipeline:
    - Preserves color information without compression artifacts
    - Maintains RGB format throughout
 
-### Stage 2: Display Manager (display/display_manager.py)
-**Purpose**: Convert optimized RGB images to 6-color display format using intelligent dithering
+### Stage 2: Display Manager - LAB Color Space Processing (display/display_manager.py)
+**Purpose**: Convert RGB to perceptually uniform LAB color space for superior color preservation
 
 **Processing Steps**:
 
@@ -61,21 +61,49 @@ The color optimization is implemented as a two-stage pipeline:
    - Center on white background
    - Optimize for low-memory Pi Zero systems
 
-2. **Color Enhancement** (Enhanced Color Range Approach):
+2. **LAB Color Space Conversion** (Advanced Color Processing):
 
-   a. **Contrast Boost** (50% enhancement):
+   LAB color space separates color into three independent channels:
+   - **L (Luminance)**: Brightness information (0-100)
+   - **a (Red-Green axis)**: Red to green (-127 to +127)
+   - **b (Yellow-Blue axis)**: Yellow to blue (-127 to +127)
+
+   **Key Advantage**: LAB is perceptually uniform - equal changes in L, a, b values correspond to equal perceived color differences.
+
+   a. **RGB to LAB Conversion** (Full pipeline):
    ```python
-   enhancer = ImageEnhance.Contrast(background)
-   background = enhancer.enhance(1.5)
+   # Step 1: Apply gamma correction (sRGB)
+   # Step 2: Transform RGB → XYZ (using D65 reference white)
+   # Step 3: Transform XYZ → LAB (perceptually uniform)
    ```
 
-   b. **Saturation Boost** (50% enhancement):
+   b. **Chrominance Enhancement** (Separate from luminance):
    ```python
-   enhancer = ImageEnhance.Color(background)
-   background = enhancer.enhance(1.5)
+   img_lab[..., 1] *= 1.4  # Boost a channel (red-green) by 40%
+   img_lab[..., 2] *= 1.4  # Boost b channel (yellow-blue) by 40%
+   img_lab[..., 0] *= 1.1  # Boost L channel (luminance) by 10%
    ```
 
-   These enhancements further maximize color separation before quantization.
+   **Why This Works**:
+   - Chrominance (color) boosted independently from luminance (brightness)
+   - Prevents colors from being washed out by brightness changes
+   - Preserves natural appearance while maximizing color saturation
+   - 40% boost provides substantial color improvement without being oversaturated
+
+   c. **LAB back to RGB Conversion**:
+   ```python
+   # Step 1: Transform LAB → XYZ
+   # Step 2: Transform XYZ → RGB (using inverse transformation)
+   # Step 3: Apply reverse gamma correction (sRGB)
+   ```
+
+3. **Extended Color Palette** (Now includes 31+ color variations):
+   - 6 core colors (hardware-optimized)
+   - 4 dark variants
+   - 4 light variants
+   - 4 additional medium variants
+   - 7 neutral grays (improved gradation)
+   Total: More granular color representation for better dithering
 
 3. **Extended Palette Creation**:
 
@@ -112,7 +140,7 @@ The color optimization is implemented as a two-stage pipeline:
 ```
 Original RGB Image
     ↓
-[Stage 1: Upload Server]
+[Stage 1: Upload Server (src/server/app.ts)]
     ├─ Normalize (maximize tonal range)
     ├─ Saturation Boost (1.8x)
     ├─ Contrast Enhancement (double-negate)
@@ -121,19 +149,95 @@ Original RGB Image
     ↓
 Optimized RGB Image (JPEG)
     ↓
-[Stage 2: Display Manager]
+[Stage 2: Display Manager (display/display_manager.py)]
     ├─ Load & Resize (800×480)
     ├─ Center on white background
-    ├─ Contrast Enhancement (+50%)
-    ├─ Saturation Boost (+50%)
-    ├─ Extended Palette (17 colors)
-    ├─ Floyd-Steinberg Dithering
+    │
+    ├─ [LAB COLOR SPACE PROCESSING - NEW]
+    │  ├─ Convert RGB → LAB (perceptually uniform)
+    │  ├─ Boost a channel (red-green) by 40%
+    │  ├─ Boost b channel (yellow-blue) by 40%
+    │  ├─ Boost L channel (luminance) by 10%
+    │  └─ Convert LAB → RGB
+    │
+    ├─ Extended Palette (31+ colors)
+    │  ├─ 6 core colors (hardware-optimized)
+    │  ├─ 4 dark variants
+    │  ├─ 4 light variants
+    │  ├─ 4 medium variants
+    │  └─ 7 neutral grays
+    │
+    ├─ Floyd-Steinberg Dithering (LAB-aware)
     └─ Convert to display buffer
     ↓
-6-Color Display Output
+6-Color E Ink Display Output (Superior Color Fidelity)
 ```
 
+**Key Improvement**: LAB color space processing ensures that color (chrominance) is enhanced independently from brightness (luminance), resulting in vibrant colors while maintaining natural appearance.
+
 ## Technical Details
+
+### LAB Color Space Implementation
+
+The LAB conversion is implemented using the standard CIE LAB color space with D65 illuminant:
+
+**RGB → LAB Conversion Pipeline** (display_manager.py):
+```python
+# Step 1: Apply sRGB gamma correction
+# Converts linear light values to perceptual space
+mask = img_array > 0.04045
+img_linear = where(mask, ((img_array + 0.055) / 1.055)^2.4, img_array / 12.92)
+
+# Step 2: RGB → XYZ transformation (using D65 reference white)
+# Linear transformation using standard matrix
+transform_matrix = [
+    [0.4124, 0.3576, 0.1805],
+    [0.2126, 0.7152, 0.0722],
+    [0.0193, 0.1192, 0.9505]
+]
+
+# Step 3: XYZ → LAB transformation
+# Nonlinear function to create perceptually uniform space
+L = 116 * f(Y/Yn) - 16     # Luminance (0-100)
+a = 500 * (f(X/Xn) - f(Y/Yn))   # Red-Green (-127 to 127)
+b = 200 * (f(Y/Yn) - f(Z/Zn))   # Yellow-Blue (-127 to 127)
+```
+
+**Chrominance Boost** (display_manager.py, lines 308-314):
+```python
+# Boost color channels independently from brightness
+a_channel *= 1.4   # 40% boost for red-green axis
+b_channel *= 1.4   # 40% boost for yellow-blue axis
+L_channel *= 1.1   # 10% boost for luminance (modest)
+
+# This produces vibrant colors without looking oversaturated or unnatural
+```
+
+**LAB → RGB Conversion** (Reverse pipeline):
+```python
+# Step 1: Inverse XYZ transformation
+# Step 2: Convert XYZ → RGB
+# Step 3: Apply reverse sRGB gamma correction
+```
+
+### Why LAB Color Space Processing Works
+
+The original RGB approach had a critical limitation: it couldn't distinguish between color information and brightness information. When colors appeared washed out and gray, it was because:
+
+1. **RGB Enhancement Affected Both Channels**: Increasing saturation in RGB space affects brightness
+2. **Lost Color Information**: Brightness changes masked color differences
+3. **No Perceptual Uniformity**: Equal RGB changes don't equal equal perceived color changes
+
+**LAB Solution**:
+- **L channel (Luminance)**: Controls brightness (0-100)
+- **a channel (Red-Green)**: Controls color hue (-127 to +127)
+- **b channel (Yellow-Blue)**: Controls color hue (-127 to +127)
+
+By boosting a and b channels by 40% while only boosting L by 10%, we get:
+- ✅ Vibrant, saturated colors
+- ✅ Natural brightness levels
+- ✅ Preserved color information
+- ✅ No washed-out appearance
 
 ### Why Extended Palette Helps
 

@@ -149,7 +149,7 @@ Based on research from the EPF project, the system uses adjusted color values th
 
 These adjusted values provide significantly better color accuracy than pure RGB values.
 
-### Two-Stage Color Processing
+### Three-Stage Color Processing (LAB Color Space)
 
 1. **Server-Side Enhancement** (upload processing):
    - Image normalization for optimal tonal range
@@ -157,9 +157,15 @@ These adjusted values provide significantly better color accuracy than pure RGB 
    - Contrast enhancement via double-negation technique
    - High-quality JPEG preservation (95-98%)
 
-2. **Display-Side Optimization** (display rendering):
-   - Additional 50% contrast and saturation enhancement
-   - Extended 17-color palette for dithering (vs. just 6 core colors)
+2. **Display-Side LAB Color Space Processing** (perceptually uniform):
+   - **Convert RGB → LAB**: Separate color from brightness using perceptually uniform color space
+   - **Boost Chrominance**: Enhance color channels (a,b) by 40% independently
+   - **Preserve Luminance**: Enhance brightness (L) by only 10% for natural appearance
+   - **Convert back to RGB**: Maintain compatibility with display hardware
+   - **Result**: Vibrant colors without washed-out appearance ✨
+
+3. **Display Rendering & Quantization**:
+   - Extended 31+ color palette for dithering (vs. just 6 core colors)
    - Floyd-Steinberg dithering for smooth color distribution
    - Memory-optimized processing for Raspberry Pi Zero
 
