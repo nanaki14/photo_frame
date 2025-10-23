@@ -75,17 +75,45 @@ class MockEPD:
 def get_epd_instance():
     """Get e-Paper display instance, with fallback to mock for development"""
     try:
+        # Check for environment variable override
+        env_path = os.environ.get('WAVESHARE_LIB_PATH')
+
+        # Try multiple possible paths for Waveshare library
+        possible_paths = []
+
+        if env_path:
+            possible_paths.append(env_path)
+            logger.info(f"Using WAVESHARE_LIB_PATH from environment: {env_path}")
+
+        possible_paths.extend([
+            # Home directory based (dynamic)
+            os.path.expanduser('~/e-Paper/RaspberryPi_JetsonNano/python/lib'),
+            # Absolute paths
+            '/home/pi/e-Paper/RaspberryPi_JetsonNano/python/lib',
+            '/root/e-Paper/RaspberryPi_JetsonNano/python/lib',
+            # System-wide installation
+            '/usr/local/lib/python3/dist-packages',
+        ])
+
+        # Try to add valid paths to sys.path
+        for path in possible_paths:
+            expanded_path = os.path.expanduser(path)
+            if os.path.isdir(expanded_path) and expanded_path not in sys.path:
+                sys.path.insert(0, expanded_path)
+                logger.info(f"Added to sys.path: {expanded_path}")
+
         # Try to import the actual Waveshare library
-        sys.path.append('/home/pi/e-Paper/RaspberryPi_JetsonNano/python/lib')
         from waveshare_epd import epd7in3f
         epd = epd7in3f.EPD()
-        logger.info("Waveshare 7.3inch e-Paper display library loaded")
+        logger.info("Waveshare 7.3inch e-Paper display library loaded successfully")
         return epd
-    except ImportError:
-        logger.warning("Waveshare library not found, using mock display")
+    except ImportError as e:
+        logger.warning(f"Waveshare library not found (ImportError: {e}), using mock display")
+        logger.info(f"Searched paths: {[os.path.expanduser(p) for p in possible_paths]}")
         return MockEPD()
     except Exception as e:
         logger.error(f"Error loading Waveshare library: {e}")
+        logger.warning("Falling back to mock display")
         return MockEPD()
 
 class DisplayManager:
