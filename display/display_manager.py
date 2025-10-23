@@ -73,7 +73,12 @@ class MockEPD:
         logger.info("Mock display cleared")
 
 def get_epd_instance():
-    """Get e-Paper display instance, with fallback to mock for development"""
+    """Get e-Paper display instance, with fallback to mock for development
+
+    Supports:
+    - Waveshare 7.3inch e-Paper HAT (E) - E Ink Spectra 6 (6-color)
+    - epd7in3f.py module (6-color: black, white, red, yellow, green, blue)
+    """
     # Check for mock mode override
     use_mock_mode = os.environ.get('MOCK_DISPLAY', '').lower() in ('true', '1', 'yes')
 
@@ -82,8 +87,12 @@ def get_epd_instance():
         return MockEPD()
 
     try:
-        # Check for environment variable override
+        # Check for environment variable override for library path
         env_path = os.environ.get('WAVESHARE_LIB_PATH')
+
+        # Check for environment variable to select display model
+        display_model = os.environ.get('WAVESHARE_MODEL', 'epd7in3f').lower()
+        logger.info(f"Target display model: {display_model}")
 
         # Try multiple possible paths for Waveshare library
         possible_paths = []
@@ -109,14 +118,29 @@ def get_epd_instance():
                 sys.path.insert(0, expanded_path)
                 logger.info(f"Added to sys.path: {expanded_path}")
 
-        # Try to import the actual Waveshare library
-        from waveshare_epd import epd7in3f
+        # Try to import the Waveshare library module
+        logger.info(f"Attempting to import waveshare_epd.{display_model}")
+        if display_model == 'epd7in3f':
+            from waveshare_epd import epd7in3f
+            epd_module = epd7in3f
+        elif display_model == 'epd7in3b':
+            from waveshare_epd import epd7in3b
+            epd_module = epd7in3b
+        elif display_model == 'epd7in3c':
+            from waveshare_epd import epd7in3c
+            epd_module = epd7in3c
+        else:
+            # Default to epd7in3f (7-color Spectra 6)
+            from waveshare_epd import epd7in3f
+            epd_module = epd7in3f
+            logger.info(f"Unknown model {display_model}, defaulting to epd7in3f")
+
         logger.info("Waveshare library imported successfully")
 
         # Try to initialize the hardware
         try:
-            epd = epd7in3f.EPD()
-            logger.info("Waveshare 7.3inch e-Paper display hardware initialized")
+            epd = epd_module.EPD()
+            logger.info(f"Waveshare 7.3inch e-Paper display ({display_model}) hardware initialized")
             return epd
         except OSError as e:
             # Hardware not available (GPIO/SPI not accessible)
@@ -160,7 +184,15 @@ class DisplayManager:
     
     def optimize_image_for_eink(self, image_path: str) -> Optional[Image.Image]:
         """
-        Optimize image for e-ink display characteristics with Pi Zero optimizations
+        Optimize image for E Ink Spectra 6 (6-color) e-Paper display.
+
+        E Ink Spectra 6 supports 6 colors:
+        - Black: RGB(0, 0, 0)
+        - White: RGB(255, 255, 255)
+        - Red: RGB(255, 0, 0)
+        - Yellow: RGB(255, 255, 0)
+        - Green: RGB(0, 128, 0)
+        - Blue: RGB(0, 0, 255)
         """
         try:
             # Load image with memory optimization for Pi Zero
@@ -170,9 +202,9 @@ class DisplayManager:
                 img.draft('RGB', (self.display_width, self.display_height))
             else:
                 img = Image.open(image_path)
-            
+
             logger.info(f"Loaded image: {img.size}")
-            
+
             # Convert to RGB if necessary
             if img.mode != 'RGB':
                 img = img.convert('RGB')
@@ -205,12 +237,39 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply e-ink color optimizations while maintaining RGB format
-            # Waveshare 7.3inch e-Paper supports Red, Black, and White colors
-            logger.info(f"Applying e-ink color optimizations (keeping RGB format)")
+            # Apply E Ink Spectra 6 (6-color) optimizations
+            # The display supports: Black, White, Red, Yellow, Green, Blue
+            logger.info("Applying E Ink Spectra 6 (6-color) optimizations")
 
-            # For Waveshare color display, enhance contrast and adjust colors
-            # to work better with limited color palette (Red, Black, White)
+            def quantize_to_6_colors(r, g, b):
+                """
+                Quantize RGB color to one of the 6 E Ink Spectra 6 colors.
+                Returns RGB tuple closest to Spectra 6 palette.
+                """
+                # Define the 6 color palette for E Ink Spectra 6 (official)
+                palette = [
+                    (0, 0, 0),        # Black
+                    (255, 255, 255),  # White
+                    (255, 0, 0),      # Red
+                    (255, 255, 0),    # Yellow
+                    (0, 128, 0),      # Green
+                    (0, 0, 255),      # Blue
+                ]
+
+                # Find closest color in palette using Euclidean distance
+                min_distance = float('inf')
+                closest_color = palette[0]
+
+                for color in palette:
+                    # Calculate Euclidean distance in RGB space
+                    distance = (r - color[0])**2 + (g - color[1])**2 + (b - color[2])**2
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_color = color
+
+                return closest_color
+
+            # Process image pixels
             if SYSTEM_INFO['is_low_memory']:
                 # Use in-place operations to save memory on Pi Zero
                 pixels = background.load()
@@ -224,45 +283,20 @@ class DisplayManager:
                     for y in range(y_start, y_end):
                         for x in range(width):
                             r, g, b = pixels[x, y]
-
-                            # Calculate luminance for contrast enhancement
-                            luminance = int(0.299 * r + 0.587 * g + 0.114 * b)
-
-                            # Enhance contrast
-                            enhanced = min(255, max(0, int((luminance - 128) * 1.2 + 128)))
-
-                            # Apply back to RGB, slightly boosting saturation for visibility
-                            # This helps with color perception on e-ink
-                            if luminance > 128:
-                                # Lighter pixels -> maintain brightness
-                                pixels[x, y] = (enhanced, enhanced, enhanced)
-                            else:
-                                # Darker pixels -> slightly boost color channels for better contrast
-                                pixels[x, y] = (min(255, enhanced + 20),
-                                              min(255, enhanced + 20),
-                                              min(255, enhanced + 20))
+                            # Quantize to nearest Spectra 6 color
+                            quantized = quantize_to_6_colors(r, g, b)
+                            pixels[x, y] = quantized
             else:
                 # For systems with more memory, use RGB processing
                 pixels = background.load()
                 for y in range(background.height):
                     for x in range(background.width):
                         r, g, b = pixels[x, y]
+                        # Quantize to nearest Spectra 6 color
+                        quantized = quantize_to_6_colors(r, g, b)
+                        pixels[x, y] = quantized
 
-                        # Calculate luminance
-                        luminance = int(0.299 * r + 0.587 * g + 0.114 * b)
-
-                        # Enhance contrast
-                        enhanced = min(255, max(0, int((luminance - 128) * 1.2 + 128)))
-
-                        # Apply back to RGB
-                        if luminance > 128:
-                            pixels[x, y] = (enhanced, enhanced, enhanced)
-                        else:
-                            pixels[x, y] = (min(255, enhanced + 20),
-                                          min(255, enhanced + 20),
-                                          min(255, enhanced + 20))
-
-            logger.info(f"Image optimized for color e-ink display: {background.size}")
+            logger.info(f"Image optimized for E Ink Spectra 6 display (6-color): {background.size}")
             return background
             
         except Exception as e:

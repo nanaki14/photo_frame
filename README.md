@@ -7,11 +7,12 @@ A modern web-based digital photo frame system that allows you to upload photos f
 ## ✨ Features
 
 - **📱 Smartphone Upload**: Drag & drop JPEG photos via web interface
-- **🖥️ E-ink Display**: 800×480 Waveshare 7.3inch e-Paper display
+- **🖥️ E-ink Display**: 800×480 Waveshare 7.3inch e-Paper HAT (E) - E Ink Spectra 6 (6-color)
+  - Supports 6 colors: Black, White, Red, Yellow, Green, Blue
 - **⚡ Real-time Updates**: Instant display refresh when photos are uploaded
 - **📡 WiFi Enabled**: Access from any device on your network
 - **🔄 Single Photo Mode**: New photos replace old ones automatically
-- **🎨 Smart Processing**: Automatic image optimization for e-ink display
+- **🎨 Smart Processing**: Automatic image optimization for E Ink Spectra 6 display
 - **📊 System Monitoring**: Battery, storage, and display status
 - **🔧 Easy Setup**: Automated installation scripts
 
@@ -149,9 +150,9 @@ sudo systemctl enable photo-frame.service
 
 ### Software
 - Raspberry Pi OS Lite
-- Node.js (installed via script)
+- Node.js or Bun runtime (installed via script)
 - Python 3.8+
-- Bun runtime (installed via script)
+- Waveshare e-Paper library (installed via script)
 
 ## 📁 Project Structure
 
