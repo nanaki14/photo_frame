@@ -97,6 +97,31 @@ install_project_deps() {
     fi
 }
 
+# Build frontend
+build_frontend() {
+    log "Building frontend..."
+
+    if [ -f "package.json" ]; then
+        if command -v bun &>/dev/null; then
+            log "Running: bun run build"
+            bun run build
+        elif command -v npm &>/dev/null; then
+            log "Running: npm run build"
+            npm run build
+        else
+            warn "No build tool found, skipping frontend build"
+            return
+        fi
+
+        # Verify build output
+        if [ -d "src/dist" ]; then
+            log "Frontend build completed successfully"
+        else
+            warn "Frontend build directory not found, but continuing..."
+        fi
+    fi
+}
+
 # Setup minimal directories
 setup_directories() {
     log "Creating directories..."
@@ -170,6 +195,7 @@ main() {
     install_dependencies
     install_runtime
     install_project_deps
+    build_frontend
     setup_directories
     create_service
 
