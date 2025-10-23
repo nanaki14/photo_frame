@@ -193,30 +193,29 @@ app.post('/api/photo', async (c) => {
 			sequentialRead: true, // Better for single-core Pi Zero
 		});
 
-		const processedBuffer = await sharpInstance
+		// CRITICAL FIX: Convert to RGB explicitly FIRST before any color operations
+		// Some JPEGs might be in other color spaces
+		let processStream = sharpInstance
+			.toColorspace('srgb')  // Ensure sRGB color space
 			.resize(TARGET_WIDTH, TARGET_HEIGHT, {
 				fit: 'contain',
 				background: { r: 255, g: 255, b: 255 },
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
-			})
-			// CRITICAL: Do NOT normalize - it destroys color in uniform color images
-			// Normalize() stretches tonal range which can strip color information
-			// Step 1: Enhance color saturation directly without normalizing
+			});
+
+		// Add back color enhancements one by one
+		// Start with modulate ONLY (no negate, no sharpen)
+		const processedBuffer = await processStream
 			.modulate({
-				brightness: 1.0,   // Maintain original brightness
-				saturation: 2.5,   // Strong saturation boost (avoid 3.0 which is too aggressive)
-				hue: 0,            // No hue shift
+				brightness: 1.0,
+				saturation: 3.0,  // Maximum saturation for color visibility
+				hue: 0,
 			})
-			// Step 2: Increase contrast with single negate pair (proven method)
-			.negate({ alpha: false })  // Invert once
-			.negate({ alpha: false })  // Invert back - creates contrast boost
-			// Step 3: Apply sharpening for clarity
-			.sharpen(1.2, 0.5, 0.5)  // Standard sharpening
 			.jpeg({
-				quality: 100,  // MAXIMUM quality to preserve color (changed from 95-98)
-				progressive: false,       // Disable progressive for e-ink displays
-				optimiseScans: false,     // Disable optimization for faster processing
+				quality: 100,  // MAXIMUM quality
+				progressive: false,
+				optimiseScans: false,
 			})
 			.toBuffer();
 
