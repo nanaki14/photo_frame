@@ -100,9 +100,11 @@ http://<YOUR_PI_IP>:3000
 
 Before starting the service, ensure hardware is properly connected:
 
-1. **Waveshare e-Paper HAT**: Connect to Raspberry Pi's 40-pin GPIO header
+1. **Waveshare e-Paper HAT**: Connect to Raspberry Pi's 40-pin GPIO header (optional - system works without it using mock display)
 2. **Power Supply**: Use 5V 2.5A or better (USB-C on Pi Zero 2 WH)
 3. **MicroSD Card**: 16GB+ with Raspberry Pi OS Lite pre-installed
+
+**Note**: The installation script automatically installs the Waveshare e-Paper library. If hardware is not connected, the system will use a mock display for development/testing.
 
 #### Troubleshooting
 
@@ -110,9 +112,17 @@ Before starting the service, ensure hardware is properly connected:
 # Check service logs
 sudo journalctl -u photo-frame.service -n 50
 
-# Manually test display (if Python display manager exists)
+# Check display status
+source ~/photo_frame/venv/bin/activate
+python3 ~/photo_frame/display/update_display.py ~/photo_frame/uploads/photo.jpg
+
+# View display manager logs
+tail -20 /tmp/display_manager.log
+
+# Manually test display
+source ~/photo_frame/venv/bin/activate
 cd ~/photo_frame/display
-python3 -c "from display_manager import DisplayManager; d = DisplayManager(); print('OK')"
+python3 display_manager.py test
 
 # Restart service
 sudo systemctl restart photo-frame.service

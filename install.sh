@@ -97,6 +97,36 @@ install_project_deps() {
     fi
 }
 
+# Install Waveshare e-Paper library
+install_waveshare_lib() {
+    log "Installing Waveshare e-Paper library..."
+
+    # Check if library already exists
+    if [ -d "$HOME/e-Paper" ]; then
+        log "Waveshare e-Paper library already exists at $HOME/e-Paper"
+        log "Updating library..."
+        cd "$HOME/e-Paper"
+        git pull
+        cd - > /dev/null
+    else
+        log "Cloning Waveshare e-Paper library..."
+        cd "$HOME"
+        git clone https://github.com/waveshare/e-Paper.git
+
+        if [ ! -d "$HOME/e-Paper" ]; then
+            error "Failed to clone Waveshare e-Paper library"
+        fi
+    fi
+
+    # Verify library installation
+    WAVESHARE_LIB_PATH="$HOME/e-Paper/RaspberryPi_JetsonNano/python/lib"
+    if [ -d "$WAVESHARE_LIB_PATH" ]; then
+        log "Waveshare e-Paper library verified at $WAVESHARE_LIB_PATH"
+    else
+        warn "Waveshare library path not found, but continuing..."
+    fi
+}
+
 # Build frontend
 build_frontend() {
     log "Building frontend..."
@@ -201,6 +231,7 @@ main() {
     install_dependencies
     install_runtime
     install_project_deps
+    install_waveshare_lib
     build_frontend
     setup_directories
     create_service
