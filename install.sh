@@ -28,29 +28,40 @@ install_runtime() {
     # Check if Bun is already installed
     if command -v bun &>/dev/null; then
         log "Bun already installed at $(which bun)"
+        BUN_PATH=$(which bun)
+        return
+    fi
+
+    # Check if Bun exists in ~/.bun/bin (even if not in PATH)
+    if [ -f "$HOME/.bun/bin/bun" ]; then
+        log "Bun found at $HOME/.bun/bin/bun, adding to PATH..."
+        export BUN_INSTALL="$HOME/.bun"
+        export PATH="$BUN_INSTALL/bin:$PATH"
+        BUN_PATH="$HOME/.bun/bin/bun"
         return
     fi
 
     # Check if Node.js is already installed
     if command -v node &>/dev/null; then
         log "Node.js already installed at $(which node)"
+        USE_NODE=true
         return
     fi
 
     # Install Bun from official script
     log "Installing Bun runtime..."
+    export BUN_INSTALL="$HOME/.bun"
     curl -fsSL https://bun.sh/install | bash
 
-    # Update PATH for current session
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH="$BUN_INSTALL/bin:$PATH"
-
     # Verify Bun installation
-    if command -v bun &>/dev/null; then
-        log "Bun installed successfully at $(which bun)"
+    if [ -f "$HOME/.bun/bin/bun" ]; then
+        log "Bun installed successfully at $HOME/.bun/bin/bun"
+        export PATH="$BUN_INSTALL/bin:$PATH"
+        BUN_PATH="$HOME/.bun/bin/bun"
     else
         warn "Bun installation failed, falling back to Node.js..."
         sudo apt install -y nodejs npm
+        USE_NODE=true
     fi
 }
 
@@ -101,13 +112,19 @@ create_service() {
     local runtime_path
     local venv_activate=""
 
-    # Determine which runtime to use
-    if command -v bun &>/dev/null; then
+    # Determine which runtime to use with explicit paths
+    if [ -f "$HOME/.bun/bin/bun" ]; then
+        runtime_path="$HOME/.bun/bin/bun"
+        runtime_cmd="$HOME/.bun/bin/bun start"
+        log "Using Bun at: $runtime_path"
+    elif command -v bun &>/dev/null; then
         runtime_path=$(which bun)
         runtime_cmd="bun start"
+        log "Using Bun at: $runtime_path"
     elif command -v node &>/dev/null; then
         runtime_path=$(which node)
         runtime_cmd="npm start"
+        log "Using Node.js at: $runtime_path"
     else
         error "Neither Bun nor Node.js found. Please run install_runtime() first."
     fi
@@ -117,8 +134,7 @@ create_service() {
         venv_activate="source venv/bin/activate && "
     fi
 
-    log "Using runtime: $runtime_path"
-    log "Command: ${venv_activate}${runtime_cmd}"
+    log "Service command: ${venv_activate}${runtime_cmd}"
 
     sudo tee /etc/systemd/system/photo-frame.service > /dev/null << EOF
 [Unit]
@@ -131,7 +147,7 @@ User=$USER
 WorkingDirectory=$(pwd)
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=PATH=/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PATH=$HOME/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/bin/bash -c '${venv_activate}${runtime_cmd}'
 Restart=always
 RestartSec=5
