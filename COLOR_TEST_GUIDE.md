@@ -2,6 +2,39 @@
 
 This guide provides step-by-step instructions to verify that the color optimization enhancements are working correctly on your Waveshare E Ink Spectra 6 display.
 
+## Advanced Color Processing with LAB Color Space
+
+The system now uses **LAB color space processing** to significantly improve color reproduction:
+
+### Why LAB Color Space?
+Previously, colors appeared washed out because RGB enhancement affected both color information and brightness together. LAB color space separates these:
+
+- **L (Luminance)**: Controls brightness independently
+- **a (Chrominance)**: Controls red-green color axis
+- **b (Chrominance)**: Controls yellow-blue color axis
+
+By boosting color channels (a,b) by 40% while only boosting brightness (L) by 10%, we get:
+✅ Vibrant, saturated colors
+✅ Natural brightness levels
+✅ No washed-out appearance
+
+### Processing Pipeline
+```
+Input RGB Image
+    ↓
+Server: Saturation boost (1.8x), normalization, contrast
+    ↓
+Display: RGB → LAB conversion
+    ↓
+Chrominance boost (40%), Luminance boost (10%)
+    ↓
+LAB → RGB conversion
+    ↓
+Extended 31+ color palette + Floyd-Steinberg dithering
+    ↓
+E Ink Display Output (Vibrant Colors!)
+```
+
 ## Color Palette Information
 
 The system uses **hardware-optimized color values** based on research from the EPF project. These values account for how actual e-ink hardware renders colors:
@@ -118,23 +151,33 @@ Check the logs for optimization details:
 
 ```bash
 # On Pi:
-tail -50 /tmp/display_manager.log | grep -E "Step|Contrast|saturation|dither|palette"
+tail -100 /tmp/display_manager.log | grep -E "Step|LAB|Converting|Chrominance|dither|palette"
 
-# Expected output:
-# [INFO] Step 1: Enhancing color separation and contrast
-# [INFO] Contrast enhanced by 50%
-# [INFO] Color saturation enhanced by 50%
-# [INFO] Step 2: Creating extended color palette for better dithering
-# [INFO] Created extended palette with 17 color variations
-# [INFO] Step 3: Applying Floyd-Steinberg dithering
+# Expected output (with new LAB processing):
+# [INFO] Optimizing image for E Ink Spectra 6 using LAB color space processing
+# [INFO] Step 1: Converting to LAB color space for perceptual processing
+# [INFO] Converted to LAB color space
+# [INFO] Step 2: Enhancing chrominance (color) channels in LAB space
+# [INFO] Chrominance enhanced by 40%, luminance by 10%
+# [INFO] Step 3: Converting back to RGB color space
+# [INFO] Converted back to RGB, LAB processing complete
+# [INFO] Step 4: Creating extended color palette optimized for LAB color space
+# [INFO] Created extended palette with 31+ color variations
+# [INFO] Step 5: Applying LAB-aware Floyd-Steinberg dithering
 ```
 
-**Visual Inspection**:
-- All 6 colors should appear distinct and visible
-- Black should be solid black, not gray
-- Red, Yellow, Green, Blue should be vibrant
-- White should be solid white
-- Grayscale gradient at bottom should show gradation from black to white
+**Visual Inspection** (with LAB color space processing):
+- ✅ **All 6 colors should be VIBRANT and clearly visible** (major improvement!)
+- ✅ **NO white/black predominance** - colors are saturated
+- ✅ Black should be solid black, not gray
+- ✅ Red, Yellow, Green, Blue should be **vibrant and natural-looking**
+- ✅ White should be solid white
+- ✅ Grayscale gradient at bottom should show smooth gradation
+- ✅ **Color transitions should be smooth** (improved dithering)
+
+**Compared to Previous Version**:
+- Before: Colors appeared mostly white/black, very little color visible
+- After: Colors are vibrant, all 6 colors distinguishable, natural appearance
 
 ## Test 2: Colorful Photo Test
 
