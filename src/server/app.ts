@@ -184,8 +184,9 @@ app.post('/api/photo', async (c) => {
 		// Convert File to Buffer
 		const buffer = Buffer.from(await file.arrayBuffer());
 
-		// Process image with Sharp (resize and optimize for Waveshare 7.3inch e-ink color display)
+		// Process image with Sharp (resize and optimize for Waveshare E Ink Spectra 6)
 		// Use streaming approach for better memory efficiency on Pi
+		// Note: The Floyd-Steinberg dithering is applied in display_manager.py
 		const sharpInstance = sharp(buffer, {
 			// Limit memory usage for Pi Zero 2 WH
 			limitInputPixels: isPi ? 50 * 1024 * 1024 : undefined,
@@ -199,19 +200,19 @@ app.post('/api/photo', async (c) => {
 				// Use faster algorithm on Pi
 				kernel: isPi ? 'nearest' : 'lanczos3',
 			})
-			// Enhance saturation for E Ink Spectra 6 color display
-			// E-ink has limited color palette, so boost saturation to preserve colors
+			// Optimize colors for E Ink Spectra 6 (6-color display)
+			// Note: Floyd-Steinberg dithering happens in display_manager.py
 			.modulate({
-				brightness: 1.05, // Slightly boost brightness
-				saturation: 1.3,  // Significantly boost saturation (was 0.9) for color preservation
+				brightness: 1.0,  // Maintain original brightness
+				saturation: 1.2,  // Boost saturation for color visibility
 				hue: 0,          // No hue shift
 			})
-			// Increase contrast for better color separation on e-ink
+			// Increase contrast to help color separation in the 6-color palette
 			.normalize()
-			// Apply sharpening for better definition
-			.sharpen(1.5, 0.5, 1.0) // Enhanced sharpening (was 1.0, 0.5, 0.5)
+			// Apply minimal sharpening (dithering will provide fine detail)
+			.sharpen(1.0, 0.5, 0.5)
 			.jpeg({
-				quality: isPi ? 95 : 98, // Very high quality for color accuracy (was 90/95)
+				quality: isPi ? 95 : 98, // High quality to preserve colors before dithering
 				progressive: false,      // Disable progressive for e-ink displays
 				optimiseScans: false,    // Disable optimization for faster processing
 			})

@@ -247,12 +247,12 @@ class DisplayManager:
             background.paste(img, (x_offset, y_offset))
 
             # Apply E Ink Spectra 6 (6-color) optimizations using official Waveshare method
-            # Using Floyd-Steinberg dithering for better color representation
-            logger.info("Applying E Ink Spectra 6 (6-color) with Floyd-Steinberg dithering")
+            # Based on: https://github.com/waveshareteam/e-Paper/.../epd_7in3e_test.py
+            logger.info("Optimizing image for E Ink Spectra 6 with Floyd-Steinberg dithering")
 
             # Official E Ink Spectra 6 color palette
             # These are the 6 colors supported by HAT (E)
-            spectra_colors = [
+            palette_colors = [
                 (0, 0, 0),        # Black
                 (255, 255, 255),  # White
                 (255, 0, 0),      # Red
@@ -261,34 +261,36 @@ class DisplayManager:
                 (0, 0, 255),      # Blue
             ]
 
-            # Create a PIL palette image for quantization
-            # This follows the official Waveshare example
-            logger.info("Creating color palette for quantization")
+            # Create an 8-bit palette image for quantization
+            # This follows the official Waveshare example exactly
+            logger.info("Creating Spectra 6 color palette (8-bit)")
             palette_image = Image.new('P', (1, 1))
             palette = []
 
             # Add the 6 Spectra colors to the palette
-            for color in spectra_colors:
+            for color in palette_colors:
                 palette.extend(color)  # Each color is 3 bytes (R, G, B)
 
-            # Pad palette to 256 colors (768 bytes)
-            while len(palette) < 768:
+            # Pad palette to 256 colors (768 bytes total)
+            while len(palette) < 768:  # 256 * 3
                 palette.append(0)
 
             palette_image.putpalette(palette)
 
             # Quantize image using Floyd-Steinberg dithering
-            # This provides better color distribution than simple nearest-neighbor
+            # This is the critical step for good color representation
             logger.info("Quantizing image using Floyd-Steinberg dithering")
             quantized_image = background.quantize(
                 palette=palette_image,
-                dither=Image.FLOYDSTEINBERG  # Official Waveshare method
+                dither=Image.FLOYDSTEINBERG
             )
 
             # Convert back to RGB for display
+            # The EPD's getbuffer() expects RGB mode
             final_image = quantized_image.convert('RGB')
 
-            logger.info(f"Image optimized for E Ink Spectra 6 (Floyd-Steinberg dithered): {final_image.size}")
+            logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
+            logger.info("Floyd-Steinberg dithering applied for better color distribution")
             return final_image
             
         except Exception as e:
@@ -299,35 +301,48 @@ class DisplayManager:
         """
         Display an image on the E Ink Spectra 6 display.
 
-        Process:
-        1. Optimize image for Spectra 6 (resize, center, Floyd-Steinberg dithering)
-        2. Convert to buffer format using epd.getbuffer()
-        3. Display buffer on screen using epd.display()
+        Process (following official Waveshare method):
+        1. Initialize display
+        2. Load and resize image to display size
+        3. Optimize with Floyd-Steinberg dithering to 6 colors
+        4. Convert to buffer using epd.getbuffer()
+        5. Display buffer using epd.display()
+        6. Put display to sleep
 
         Note: Full color display takes 30-40 seconds on Raspberry Pi Zero.
         """
         try:
             if not self.is_initialized:
+                logger.info("Initializing E Ink Spectra 6 display...")
                 if not self.initialize():
                     logger.error("Failed to initialize display")
                     return False
 
             logger.info(f"Processing image: {image_path}")
 
-            # Optimize image for E Ink Spectra 6 with Floyd-Steinberg dithering
+            # Optimize image for E Ink Spectra 6
+            # This includes resize, center, and Floyd-Steinberg dithering
             optimized_image = self.optimize_image_for_eink(image_path)
             if not optimized_image:
                 logger.error("Failed to optimize image for display")
                 return False
 
-            logger.info(f"Image optimized, size: {optimized_image.size}, mode: {optimized_image.mode}")
-            logger.info("Converting to display buffer (this may take 30-40 seconds)...")
+            logger.info(f"Image ready for display: size={optimized_image.size}, mode={optimized_image.mode}")
+            logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
+
+            # Record start time for performance monitoring
+            start_time = time.time()
 
             # Use official Waveshare method: getbuffer() + display()
+            # getbuffer() converts the RGB image to the display's internal buffer format
             buffer = self.epd.getbuffer(optimized_image)
-            logger.info("Buffer created, sending to display...")
-
             self.epd.display(buffer)
+
+            # Record display time
+            end_time = time.time()
+            display_time = end_time - start_time
+
+            logger.info(f"Image displayed successfully in {display_time:.1f} seconds")
             logger.info(f"Successfully displayed image: {image_path}")
 
             return True
