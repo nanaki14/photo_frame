@@ -303,14 +303,22 @@ class DisplayManager:
 
             # Log pixel values for diagnostics
             sample_pixel = optimized_image.getpixel((10, 10))
-            logger.info(f"Sample pixel at (10,10): {sample_pixel}")
+            logger.info(f"Sample pixel RGB at (10,10): {sample_pixel}")
 
-            # Pass the original RGB image directly to Waveshare getbuffer()
-            # Waveshare's getbuffer() will handle all color conversion and dithering
-            display_image = optimized_image
+            # CRITICAL: Waveshare expects BGR format, but PIL uses RGB
+            # Convert RGB to BGR before passing to getbuffer()
+            logger.info("Converting RGB to BGR for Waveshare hardware...")
+
+            # Split channels and swap R and B
+            r, g, b = optimized_image.split()
+            display_image = Image.merge('RGB', (b, g, r))  # BGR order
+
+            # Verify conversion
+            sample_pixel_bgr = display_image.getpixel((10, 10))
+            logger.info(f"Sample pixel BGR at (10,10): {sample_pixel_bgr} (R and B swapped)")
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
-            logger.info("Using Waveshare getbuffer() for color conversion and dithering...")
+            logger.info("Using Waveshare getbuffer() with BGR format for color conversion and dithering...")
 
             # Record start time for performance monitoring
             start_time = time.time()
