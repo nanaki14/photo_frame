@@ -136,6 +136,19 @@ sudo systemctl enable photo-frame.service
 
 The system uses advanced color optimization to maximize visual fidelity on the 6-color e-ink display:
 
+### Hardware-Optimized Color Palette
+
+Based on research from the EPF project, the system uses adjusted color values that map better to actual e-ink hardware:
+
+- **Black**: (0, 0, 0)
+- **White**: (255, 255, 255)
+- **Red**: (191, 0, 0) ← Adjusted for better saturation
+- **Yellow**: (255, 243, 56) ← Optimized for hardware rendering
+- **Green**: (67, 138, 28) ← Darker green for e-ink visibility
+- **Blue**: (100, 64, 255) ← Adjusted for color space compatibility
+
+These adjusted values provide significantly better color accuracy than pure RGB values.
+
 ### Two-Stage Color Processing
 
 1. **Server-Side Enhancement** (upload processing):
