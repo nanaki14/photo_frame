@@ -10,7 +10,10 @@
       "Bash(bun run:*)",
       "Bash(pkill:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(cat:*)",
+      "Read(//Users/masa/**)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []

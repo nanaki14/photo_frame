@@ -305,25 +305,22 @@ class DisplayManager:
             sample_pixel = optimized_image.getpixel((10, 10))
             logger.info(f"Sample pixel RGB at (10,10): {sample_pixel}")
 
-            # CRITICAL: Waveshare expects BGR format, but PIL uses RGB
-            # Convert RGB to BGR before passing to getbuffer()
-            logger.info("Converting RGB to BGR for Waveshare hardware...")
+            # IMPORTANT: After testing, RGB format (no conversion) works correctly
+            # Test results showed BGR conversion caused incorrect colors:
+            #   - Blue (0,0,255) → BGR(255,0,0) → displayed as WHITE (wrong)
+            #   - Green (0,128,0) → BGR(0,128,0) → displayed as YELLOW (wrong)
+            # Using RGB directly gives correct results.
+            logger.info("Using RGB format directly (NO channel conversion)")
 
-            # Split channels and swap R and B
-            r, g, b = optimized_image.split()
-            display_image = Image.merge('RGB', (b, g, r))  # BGR order
-
-            # Verify conversion
-            sample_pixel_bgr = display_image.getpixel((10, 10))
-            logger.info(f"Sample pixel BGR at (10,10): {sample_pixel_bgr} (R and B swapped)")
+            display_image = optimized_image  # Use RGB as-is
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
-            logger.info("Using Waveshare getbuffer() with BGR format for color conversion and dithering...")
+            logger.info("Using Waveshare getbuffer() with RGB format for color conversion and dithering...")
 
             # Record start time for performance monitoring
             start_time = time.time()
 
-            # Use official getbuffer() method
+            # Use official getbuffer() method with RGB image
             buffer = self.epd.getbuffer(display_image)
             logger.info(f"Buffer created by getbuffer(): {len(buffer)} bytes")
 
