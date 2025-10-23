@@ -81,13 +81,13 @@ The color optimization is implemented as a two-stage pipeline:
 
    Instead of using only the 6 core colors for dithering, we create an extended palette with 17 colors:
 
-   **Core Colors (6)**:
+   **Core Colors (6)** - Optimized for E Ink Hardware:
    - Black: (0, 0, 0)
    - White: (255, 255, 255)
-   - Red: (255, 0, 0)
-   - Yellow: (255, 255, 0)
-   - Green: (0, 128, 0)
-   - Blue: (0, 0, 255)
+   - Red: (191, 0, 0) - Darker, maps better to hardware capabilities
+   - Yellow: (255, 243, 56) - Adjusted from pure yellow for better visibility
+   - Green: (67, 138, 28) - Dark green, more visible on e-ink displays
+   - Blue: (100, 64, 255) - Adjusted for better color rendering
 
    **Extended Colors (11)**:
    - Dark variants (4): Dark Red, Dark Yellow, Dark Green, Dark Blue
@@ -330,6 +330,17 @@ export COLOR_CONTRAST=1.5    # Default
 
 ## References
 
+### Color Palette Optimization
+The core color palette in this implementation is based on empirical research from the EPF project (https://github.com/jwchen119/EPF), which demonstrates that the nominal RGB values for Spectra 6 colors (pure red 255,0,0, pure yellow 255,255,0, etc.) do not map optimally to actual hardware output.
+
+**Key Finding**: Using adjusted color values that account for display characteristics provides better visual output:
+- Red: Pure (255,0,0) → Adjusted (191,0,0) - darker red appears more saturated on hardware
+- Yellow: Pure (255,255,0) → Adjusted (255,243,56) - accounts for hardware yellow representation
+- Green: Pure (0,128,0) → Adjusted (67,138,28) - darker green is more visible
+- Blue: Pure (0,0,255) → Adjusted (100,64,255) - adjusted for hardware color space
+
+This palette adjustment, combined with extended color variants and Floyd-Steinberg dithering, produces significantly improved color fidelity on e-ink displays.
+
 ### Floyd-Steinberg Dithering
 - Reduces color palette by distributing quantization error
 - Creates dithering pattern that creates perceived colors
@@ -337,7 +348,7 @@ export COLOR_CONTRAST=1.5    # Default
 - Industry standard for e-ink displays
 
 ### E Ink Spectra 6 Specifications
-- 6-color palette: Black, White, Red, Yellow, Green, Blue
+- 6-color palette: Black, White, Red, Yellow, Green, Blue (hardware-optimized)
 - 800×480 pixel resolution
 - 7.3-inch diagonal display
 - Refresh time: 30-40 seconds for full color update

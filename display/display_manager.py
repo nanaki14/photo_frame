@@ -271,14 +271,16 @@ class DisplayManager:
             # This helps the dithering algorithm have more options
             logger.info("Step 2: Creating extended color palette for better dithering")
 
-            # Official E Ink Spectra 6 core colors
+            # E Ink Spectra 6 core colors (optimized for actual display output)
+            # Based on reference implementation (EPF/app.py) which shows these values
+            # map better to actual hardware color rendering than pure RGB values
             core_colors = [
-                (0, 0, 0),        # Black
-                (255, 255, 255),  # White
-                (255, 0, 0),      # Red
-                (255, 255, 0),    # Yellow
-                (0, 128, 0),      # Green
-                (0, 0, 255),      # Blue
+                (0, 0, 0),          # Black
+                (255, 255, 255),    # White
+                (191, 0, 0),        # Red (darker, maps better to hardware)
+                (255, 243, 56),     # Yellow (adjusted, maps better)
+                (67, 138, 28),      # Green (darker, more visible on e-ink)
+                (100, 64, 255),     # Blue (adjusted for better display)
             ]
 
             # Create extended palette with intermediate shades
@@ -286,21 +288,22 @@ class DisplayManager:
             extended_palette = list(core_colors)
 
             # Add darker and lighter variants for better gradation
+            # Variants are based on adjusted core colors for consistency
             color_variations = [
-                # Darker variants
-                (64, 0, 0),       # Dark Red
-                (128, 128, 0),    # Dark Yellow
-                (0, 64, 0),       # Dark Green
-                (0, 0, 128),      # Dark Blue
-                # Lighter variants
-                (255, 128, 128),  # Light Red
-                (255, 255, 128),  # Light Yellow
-                (128, 255, 128),  # Light Green
-                (128, 128, 255),  # Light Blue
+                # Darker variants (darker shades of adjusted colors)
+                (96, 0, 0),         # Dark Red (from 191,0,0)
+                (128, 122, 28),     # Dark Yellow (from 255,243,56)
+                (34, 69, 14),       # Dark Green (from 67,138,28)
+                (50, 32, 128),      # Dark Blue (from 100,64,255)
+                # Lighter/intermediate variants
+                (223, 128, 128),    # Medium Red
+                (255, 249, 156),    # Light Yellow
+                (150, 196, 142),    # Medium Green
+                (177, 160, 255),    # Light Blue
                 # Neutral grays
-                (64, 64, 64),     # Dark Gray
-                (128, 128, 128),  # Medium Gray
-                (192, 192, 192),  # Light Gray
+                (64, 64, 64),       # Dark Gray
+                (128, 128, 128),    # Medium Gray
+                (192, 192, 192),    # Light Gray
             ]
 
             extended_palette.extend(color_variations)
