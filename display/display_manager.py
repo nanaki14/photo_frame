@@ -246,10 +246,9 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply E Ink Spectra 6 (6-color) optimizations with aggressive color enhancement
-            # NO color enhancement - let Waveshare hardware handle color conversion
-            # Simply resize to display dimensions
-            logger.info("Preparing image for E Ink Spectra 6 display (NO color modification)")
+            # Apply moderate color enhancement for E Ink Spectra 6 display
+            # Users reported colors appearing washed out, so we apply modest enhancement
+            logger.info("Preparing image for E Ink Spectra 6 display with moderate enhancement")
 
             # Save original for diagnostics
             background.save("/tmp/01_original_image.png")
@@ -259,6 +258,22 @@ class DisplayManager:
             if background.size != (DISPLAY_WIDTH, DISPLAY_HEIGHT):
                 background = background.resize((DISPLAY_WIDTH, DISPLAY_HEIGHT), Image.Resampling.LANCZOS)
                 logger.info(f"Resized to {DISPLAY_WIDTH}x{DISPLAY_HEIGHT}")
+
+            # Apply moderate color enhancement to compensate for washed out appearance
+            from PIL import ImageEnhance
+
+            # Increase saturation moderately (1.5x - not too aggressive)
+            enhancer = ImageEnhance.Color(background)
+            background = enhancer.enhance(1.5)
+            logger.info("Applied color saturation: 1.5x")
+
+            # Increase contrast moderately (1.2x)
+            enhancer = ImageEnhance.Contrast(background)
+            background = enhancer.enhance(1.2)
+            logger.info("Applied contrast: 1.2x")
+
+            background.save("/tmp/02_enhanced_image.png")
+            logger.info("Saved diagnostic: /tmp/02_enhanced_image.png")
 
             final_image = background
             logger.info(f"Image ready for Waveshare getbuffer(): size={final_image.size}, mode={final_image.mode}")
@@ -305,14 +320,21 @@ class DisplayManager:
             sample_pixel = optimized_image.getpixel((10, 10))
             logger.info(f"Sample pixel RGB at (10,10): {sample_pixel}")
 
-            # IMPORTANT: After testing, RGB format (no conversion) works correctly
-            # Test results showed BGR conversion caused incorrect colors:
-            #   - Blue (0,0,255) → BGR(255,0,0) → displayed as WHITE (wrong)
-            #   - Green (0,128,0) → BGR(0,128,0) → displayed as YELLOW (wrong)
-            # Using RGB directly gives correct results.
-            logger.info("Using RGB format directly (NO channel conversion)")
+            # CRITICAL: After extensive testing, determined color channel order is GBR
+            # Test results:
+            #   RGB direct: Red→Blue, Blue→Red, Green→Yellow, Yellow→Green (all wrong)
+            #   BGR: Red→Red, Blue→White, Green→Yellow, Yellow→Yellow (partially wrong)
+            #   GBR: Should give correct results
+            # Hardware expects GBR format (Green, Blue, Red channel order)
+            logger.info("Converting RGB to GBR for Waveshare hardware...")
 
-            display_image = optimized_image  # Use RGB as-is
+            # Split channels and reorder to GBR
+            r, g, b = optimized_image.split()
+            display_image = Image.merge('RGB', (g, b, r))  # GBR order
+
+            # Verify conversion
+            sample_pixel_gbr = display_image.getpixel((10, 10))
+            logger.info(f"Sample pixel GBR at (10,10): {sample_pixel_gbr} (reordered to G,B,R)")
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
             logger.info("Using Waveshare getbuffer() with RGB format for color conversion and dithering...")
