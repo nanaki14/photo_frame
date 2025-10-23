@@ -284,13 +284,13 @@ class DisplayManager:
             # Use direct color mapping to the 6 core colors instead
             logger.info("Step 2: Applying direct 6-color mapping")
 
-            # E Ink Spectra 6 core colors - the ONLY colors the display can show
+            # E Ink Spectra 6 core colors - CORRECTED to official values from epd7in3f.py
             core_colors = [
                 (0, 0, 0),          # Black
                 (255, 255, 255),    # White
                 (255, 0, 0),        # Red
                 (255, 255, 0),      # Yellow
-                (0, 128, 0),        # Green
+                (0, 255, 0),        # Green - FIXED: was (0, 128, 0), now pure green!
                 (0, 0, 255),        # Blue
             ]
 
@@ -409,63 +409,59 @@ class DisplayManager:
 
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
 
-            # IMPROVED: Custom 6-color buffer with better accuracy
-            logger.info("Creating optimized 6-color buffer...")
+            # Use official Waveshare approach: palette quantization
+            # Now with CORRECT color values from official epd7in3f.py
+            logger.info("Applying palette quantization with official colors...")
 
-            # Get pixel data
-            img_pixels = display_image.load()
-            width, height = display_image.size
+            # Define official 6 core colors (exact RGB values from epd7in3f.py)
+            official_colors = [
+                (0, 0, 0),          # Black
+                (255, 255, 255),    # White
+                (255, 0, 0),        # Red
+                (255, 255, 0),      # Yellow
+                (0, 255, 0),        # Green (FIXED: was 0, 128, 0)
+                (0, 0, 255),        # Blue
+            ]
 
-            # Color to buffer value mapping for E Ink Spectra 6
-            # Use exact official color values
-            color_to_index = {
-                (0, 0, 0): 0,          # Black
-                (255, 255, 255): 1,    # White
-                (255, 0, 0): 2,        # Red
-                (255, 255, 0): 3,      # Yellow
-                (0, 128, 0): 4,        # Green
-                (0, 0, 255): 5,        # Blue
-            }
+            # Create palette image with official colors
+            palette_image = Image.new('P', (1, 1))
+            palette_data = []
 
-            # Create buffer: 2 pixels per byte (4 bits each)
-            buffer_size = (width * height) // 2
-            buffer = bytearray(buffer_size)
+            for color in official_colors:
+                palette_data.extend(color)
 
-            logger.info(f"Creating buffer: {width}x{height} = {width*height} pixels, {buffer_size} bytes")
+            # Pad palette to 256 colors (768 bytes for 3 bytes per color)
+            while len(palette_data) < 768:
+                palette_data.append(0)
 
-            # Fill buffer with color indices using improved nearest-neighbor
-            for y in range(height):
-                for x in range(width):
-                    pixel = img_pixels[x, y]
-                    pixel_color = tuple(pixel[:3]) if isinstance(pixel, tuple) else (pixel, pixel, pixel)
+            palette_image.putpalette(palette_data)
 
-                    # Find closest match using Euclidean distance
-                    min_distance = float('inf')
-                    closest_index = 0
+            # Quantize the image using official palette with Floyd-Steinberg dithering
+            logger.info("Quantizing image to official 6-color palette...")
+            try:
+                quantized = display_image.quantize(
+                    palette=palette_image,
+                    dither=Image.FLOYDSTEINBERG
+                )
+                final_image = quantized.convert('RGB')
+                logger.info("Palette quantization successful")
+            except Exception as e:
+                logger.error(f"Palette quantization failed: {e}, using original image")
+                final_image = display_image
 
-                    for color, index in color_to_index.items():
-                        distance = sum((pixel_color[i] - color[i])**2 for i in range(3))
-                        if distance < min_distance:
-                            min_distance = distance
-                            closest_index = index
-
-                    # Each byte holds 2 pixels (4 bits each)
-                    byte_index = (y * width + x) // 2
-                    if (y * width + x) % 2 == 0:
-                        # Even pixel - goes in upper 4 bits
-                        buffer[byte_index] = (buffer[byte_index] & 0x0F) | ((closest_index & 0x0F) << 4)
-                    else:
-                        # Odd pixel - goes in lower 4 bits
-                        buffer[byte_index] = (buffer[byte_index] & 0xF0) | (closest_index & 0x0F)
-
-            logger.info(f"Optimized buffer created: {len(buffer)} bytes")
+            # Save diagnostic
+            final_image.save("/tmp/08_after_official_quantize.png")
+            logger.info("Saved diagnostic: /tmp/08_after_official_quantize.png")
 
             # Record start time for performance monitoring
             start_time = time.time()
 
-            # Display custom buffer
-            logger.info("Displaying optimized 6-color buffer...")
-            self.epd.display(bytes(buffer))
+            # Use official getbuffer() method
+            logger.info("Using official getbuffer()...")
+            buffer = self.epd.getbuffer(final_image)
+            logger.info(f"Buffer created: {len(buffer)} bytes")
+
+            self.epd.display(buffer)
 
             # Record display time
             end_time = time.time()
