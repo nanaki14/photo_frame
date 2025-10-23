@@ -250,6 +250,10 @@ class DisplayManager:
             # Strategy: Simple, direct color enhancement without LAB conversion
             logger.info("Optimizing image for E Ink Spectra 6 with aggressive color enhancement")
 
+            # Save before enhancement for diagnostics
+            background.save("/tmp/01_before_enhancement.png")
+            logger.info("Saved diagnostic: /tmp/01_before_enhancement.png")
+
             # Step 1: Apply simple but aggressive color enhancement
             # Avoid complex LAB conversion that may lose color information
             logger.info("Step 1: Applying direct color enhancement")
@@ -261,30 +265,34 @@ class DisplayManager:
             enhancer = ImageEnhance.Color(background)
             background = enhancer.enhance(2.5)  # 250% saturation (maximum boost)
             logger.info("Color saturation enhanced by 250%")
+            background.save("/tmp/02_after_saturation.png")
 
             # Enhance contrast to separate colors
             enhancer = ImageEnhance.Contrast(background)
             background = enhancer.enhance(1.8)  # 80% contrast boost
             logger.info("Contrast enhanced by 80%")
+            background.save("/tmp/03_after_contrast.png")
 
             # Enhance brightness slightly for visibility
             enhancer = ImageEnhance.Brightness(background)
             background = enhancer.enhance(1.1)  # 10% brightness boost
             logger.info("Brightness enhanced by 10%")
+            background.save("/tmp/04_after_brightness.png")
 
             # Step 2: Create extended color palette
             # Use more aggressive and diverse colors to ensure proper quantization
             logger.info("Step 2: Creating extended color palette with color-focused variants")
 
-            # E Ink Spectra 6 core colors - use PURE colors for maximum visibility
-            # Previously adjusted colors lost saturation - reverting to pure for better output
+            # E Ink Spectra 6 core colors - MUST match Waveshare hardware expectations
+            # These are the official 6 colors that the e-paper hardware can display
+            # Order and values matter - hardware driver maps these specific values
             core_colors = [
-                (0, 0, 0),          # Black
-                (255, 255, 255),    # White
-                (255, 0, 0),        # Red (pure - maximum saturation)
-                (255, 255, 0),      # Yellow (pure - maximum saturation)
-                (0, 200, 0),        # Green (bright, more visible)
-                (0, 0, 255),        # Blue (pure - maximum saturation)
+                (0, 0, 0),          # Black - standard
+                (255, 255, 255),    # White - standard
+                (255, 0, 0),        # Red - pure red for max saturation
+                (255, 255, 0),      # Yellow - pure yellow for max saturation
+                (0, 128, 0),        # Green - standard e-ink green (NOT our custom 0,200,0)
+                (0, 0, 255),        # Blue - pure blue for max saturation
             ]
 
             # Create extended palette with intermediate shades
@@ -371,6 +379,14 @@ class DisplayManager:
 
             # Convert back to RGB for display
             final_image = quantized_image.convert('RGB')
+
+            # Save diagnostic images
+            final_image.save("/tmp/05_after_dithering.png")
+            logger.info("Saved diagnostic: /tmp/05_after_dithering.png")
+
+            # Also save quantized image to see actual palette usage
+            quantized_image.save("/tmp/06_quantized_indexed.png")
+            logger.info("Saved diagnostic: /tmp/06_quantized_indexed.png")
 
             logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
             logger.info("Color enhancement complete: aggressive saturation (2.5x), contrast (1.8x), Floyd-Steinberg dithering")

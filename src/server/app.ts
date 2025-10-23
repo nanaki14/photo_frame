@@ -203,17 +203,20 @@ app.post('/api/photo', async (c) => {
 			// Step 1: Normalize to maximize tonal range
 			.normalize()
 			// Step 2: Significantly enhance colors for E Ink Spectra 6
-			// The 6-color palette is limited, so we boost visibility
+			// The 6-color palette is limited, so we need VERY aggressive enhancement
+			// Increased from 1.8 to 3.0 to overcome e-ink color limitations
 			.modulate({
 				brightness: 1.0,   // Maintain original brightness
-				saturation: 1.8,   // Significantly boost saturation (increased from 1.2)
+				saturation: 3.0,   // AGGRESSIVE boost (increased from 1.8 to 3.0)
 				hue: 0,            // No hue shift
 			})
-			// Step 3: Increase contrast to separate colors distinctly
+			// Step 3: Increase contrast EVEN MORE to separate colors distinctly
 			.negate({ alpha: false })  // Invert once temporarily
 			.negate({ alpha: false })  // Invert back - creates contrast boost
+			.negate({ alpha: false })  // Additional invert pair for extra contrast
+			.negate({ alpha: false })  // (total 4 negations = 2x contrast boost)
 			// Step 4: Apply edge enhancement for clarity
-			.sharpen(1.2, 0.5, 0.5)
+			.sharpen(1.5, 0.8, 0.8)  // Increased sharpening
 			.jpeg({
 				quality: isPi ? 95 : 98,  // High quality to preserve color information
 				progressive: false,       // Disable progressive for e-ink displays
