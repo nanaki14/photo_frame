@@ -74,6 +74,13 @@ class MockEPD:
 
 def get_epd_instance():
     """Get e-Paper display instance, with fallback to mock for development"""
+    # Check for mock mode override
+    use_mock_mode = os.environ.get('MOCK_DISPLAY', '').lower() in ('true', '1', 'yes')
+
+    if use_mock_mode:
+        logger.info("Mock display mode enabled via MOCK_DISPLAY environment variable")
+        return MockEPD()
+
     try:
         # Check for environment variable override
         env_path = os.environ.get('WAVESHARE_LIB_PATH')
@@ -104,9 +111,19 @@ def get_epd_instance():
 
         # Try to import the actual Waveshare library
         from waveshare_epd import epd7in3f
-        epd = epd7in3f.EPD()
-        logger.info("Waveshare 7.3inch e-Paper display library loaded successfully")
-        return epd
+        logger.info("Waveshare library imported successfully")
+
+        # Try to initialize the hardware
+        try:
+            epd = epd7in3f.EPD()
+            logger.info("Waveshare 7.3inch e-Paper display hardware initialized")
+            return epd
+        except OSError as e:
+            # Hardware not available (GPIO/SPI not accessible)
+            logger.warning(f"Hardware not available: {e}")
+            logger.warning("Using mock display (hardware not connected or SPI/GPIO not enabled)")
+            return MockEPD()
+
     except ImportError as e:
         logger.warning(f"Waveshare library not found (ImportError: {e}), using mock display")
         logger.info(f"Searched paths: {[os.path.expanduser(p) for p in possible_paths]}")
@@ -180,43 +197,72 @@ class DisplayManager:
             img = img.resize((new_width, new_height), resample_method)
             
             # Create a white background with display dimensions
+            # Keep RGB for Waveshare 7.3inch color display support
             background = Image.new('RGB', (self.display_width, self.display_height), 'white')
-            
+
             # Center the image on the background
             x_offset = (self.display_width - new_width) // 2
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
-            
-            # Convert to grayscale for better e-ink rendering
-            background = background.convert('L')
-            
-            # Apply e-ink optimizations with memory-conscious approach
+
+            # Apply e-ink color optimizations while maintaining RGB format
+            # Waveshare 7.3inch e-Paper supports Red, Black, and White colors
+            logger.info(f"Applying e-ink color optimizations (keeping RGB format)")
+
+            # For Waveshare color display, enhance contrast and adjust colors
+            # to work better with limited color palette (Red, Black, White)
             if SYSTEM_INFO['is_low_memory']:
-                # Use in-place operations to save memory
+                # Use in-place operations to save memory on Pi Zero
                 pixels = background.load()
                 width, height = background.size
-                
+
                 # Process in chunks to avoid memory spikes
                 chunk_size = 100 if SYSTEM_INFO['is_pi'] else height
-                
+
                 for y_start in range(0, height, chunk_size):
                     y_end = min(y_start + chunk_size, height)
                     for y in range(y_start, y_end):
                         for x in range(width):
-                            pixel = pixels[x, y]
-                            # Apply contrast enhancement
-                            enhanced = min(255, max(0, int((pixel - 128) * 1.2 + 128)))
-                            pixels[x, y] = enhanced
+                            r, g, b = pixels[x, y]
+
+                            # Calculate luminance for contrast enhancement
+                            luminance = int(0.299 * r + 0.587 * g + 0.114 * b)
+
+                            # Enhance contrast
+                            enhanced = min(255, max(0, int((luminance - 128) * 1.2 + 128)))
+
+                            # Apply back to RGB, slightly boosting saturation for visibility
+                            # This helps with color perception on e-ink
+                            if luminance > 128:
+                                # Lighter pixels -> maintain brightness
+                                pixels[x, y] = (enhanced, enhanced, enhanced)
+                            else:
+                                # Darker pixels -> slightly boost color channels for better contrast
+                                pixels[x, y] = (min(255, enhanced + 20),
+                                              min(255, enhanced + 20),
+                                              min(255, enhanced + 20))
             else:
-                # Use faster numpy-style operations if memory allows
+                # For systems with more memory, use RGB processing
                 pixels = background.load()
                 for y in range(background.height):
                     for x in range(background.width):
-                        pixel = pixels[x, y]
-                        enhanced = min(255, max(0, int((pixel - 128) * 1.2 + 128)))
-                        pixels[x, y] = enhanced
-            
-            logger.info(f"Image optimized for e-ink: {background.size}")
+                        r, g, b = pixels[x, y]
+
+                        # Calculate luminance
+                        luminance = int(0.299 * r + 0.587 * g + 0.114 * b)
+
+                        # Enhance contrast
+                        enhanced = min(255, max(0, int((luminance - 128) * 1.2 + 128)))
+
+                        # Apply back to RGB
+                        if luminance > 128:
+                            pixels[x, y] = (enhanced, enhanced, enhanced)
+                        else:
+                            pixels[x, y] = (min(255, enhanced + 20),
+                                          min(255, enhanced + 20),
+                                          min(255, enhanced + 20))
+
+            logger.info(f"Image optimized for color e-ink display: {background.size}")
             return background
             
         except Exception as e:

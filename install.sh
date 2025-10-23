@@ -209,6 +209,9 @@ WorkingDirectory=$(pwd)
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=PATH=$HOME/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Use mock display if Waveshare hardware is not available
+# Set to 'false' if you have Waveshare e-Paper hardware connected
+Environment=MOCK_DISPLAY=true
 ExecStart=/bin/bash -c '${venv_activate}${runtime_cmd}'
 Restart=always
 RestartSec=5
