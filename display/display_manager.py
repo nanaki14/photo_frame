@@ -77,7 +77,9 @@ def get_epd_instance():
 
     Supports:
     - Waveshare 7.3inch e-Paper HAT (E) - E Ink Spectra 6 (6-color)
-    - epd7in3f.py module (6-color: black, white, red, yellow, green, blue)
+      Uses epd7in3e.py module with Floyd-Steinberg dithering
+    - Colors: Black, White, Red, Yellow, Green, Blue
+    - Display time: 30-40 seconds for full color on Raspberry Pi Zero
     """
     # Check for mock mode override
     use_mock_mode = os.environ.get('MOCK_DISPLAY', '').lower() in ('true', '1', 'yes')
@@ -120,20 +122,27 @@ def get_epd_instance():
 
         # Try to import the Waveshare library module
         logger.info(f"Attempting to import waveshare_epd.{display_model}")
-        if display_model == 'epd7in3f':
+        if display_model == 'epd7in3e':
+            from waveshare_epd import epd7in3e
+            epd_module = epd7in3e
+            logger.info("Using epd7in3e (HAT (E) - Spectra 6)")
+        elif display_model == 'epd7in3f':
             from waveshare_epd import epd7in3f
             epd_module = epd7in3f
+            logger.info("Using epd7in3f (7-color Spectra)")
         elif display_model == 'epd7in3b':
             from waveshare_epd import epd7in3b
             epd_module = epd7in3b
+            logger.info("Using epd7in3b (Red/Black/White)")
         elif display_model == 'epd7in3c':
             from waveshare_epd import epd7in3c
             epd_module = epd7in3c
+            logger.info("Using epd7in3c (Red/Black/White variant)")
         else:
-            # Default to epd7in3f (7-color Spectra 6)
-            from waveshare_epd import epd7in3f
-            epd_module = epd7in3f
-            logger.info(f"Unknown model {display_model}, defaulting to epd7in3f")
+            # Default to epd7in3e (HAT (E) - Spectra 6)
+            from waveshare_epd import epd7in3e
+            epd_module = epd7in3e
+            logger.info(f"Unknown model {display_model}, defaulting to epd7in3e")
 
         logger.info("Waveshare library imported successfully")
 
@@ -237,12 +246,13 @@ class DisplayManager:
             y_offset = (self.display_height - new_height) // 2
             background.paste(img, (x_offset, y_offset))
 
-            # Apply E Ink Spectra 6 (6-color) optimizations with enhanced color preservation
-            # The display supports: Black, White, Red, Yellow, Green, Blue
-            logger.info("Applying E Ink Spectra 6 (6-color) optimizations with enhanced color")
+            # Apply E Ink Spectra 6 (6-color) optimizations using official Waveshare method
+            # Using Floyd-Steinberg dithering for better color representation
+            logger.info("Applying E Ink Spectra 6 (6-color) with Floyd-Steinberg dithering")
 
             # Official E Ink Spectra 6 color palette
-            SPECTRA_PALETTE = [
+            # These are the 6 colors supported by HAT (E)
+            spectra_colors = [
                 (0, 0, 0),        # Black
                 (255, 255, 255),  # White
                 (255, 0, 0),      # Red
@@ -251,61 +261,35 @@ class DisplayManager:
                 (0, 0, 255),      # Blue
             ]
 
-            def smart_quantize_to_color(r, g, b):
-                """
-                Smart color quantization for E Ink Spectra 6.
-                Uses HSL (Hue, Saturation, Lightness) to preserve color information
-                better than simple Euclidean distance.
-                """
-                import colorsys
+            # Create a PIL palette image for quantization
+            # This follows the official Waveshare example
+            logger.info("Creating color palette for quantization")
+            palette_image = Image.new('P', (1, 1))
+            palette = []
 
-                # Convert RGB to HSL for better color analysis
-                # Normalize RGB to 0-1 range
-                r_norm = r / 255.0
-                g_norm = g / 255.0
-                b_norm = b / 255.0
+            # Add the 6 Spectra colors to the palette
+            for color in spectra_colors:
+                palette.extend(color)  # Each color is 3 bytes (R, G, B)
 
-                h, l, s = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
+            # Pad palette to 256 colors (768 bytes)
+            while len(palette) < 768:
+                palette.append(0)
 
-                # Determine if it's closer to black, white, or a color
-                # If saturation is low, it's grayscale
-                if s < 0.15:
-                    # Grayscale: choose between black and white based on lightness
-                    return (0, 0, 0) if l < 0.5 else (255, 255, 255)
+            palette_image.putpalette(palette)
 
-                # If saturation is high, use hue to select color
-                # Hue range: 0-1 represents 0-360 degrees
-                # Red: 0.0, Yellow: 0.166, Green: 0.333, Cyan: 0.5, Blue: 0.666, Magenta: 0.833
+            # Quantize image using Floyd-Steinberg dithering
+            # This provides better color distribution than simple nearest-neighbor
+            logger.info("Quantizing image using Floyd-Steinberg dithering")
+            quantized_image = background.quantize(
+                palette=palette_image,
+                dither=Image.FLOYDSTEINBERG  # Official Waveshare method
+            )
 
-                if h < 0.05 or h > 0.95:  # Red (0-18° or 342-360°)
-                    return (255, 0, 0)
-                elif 0.05 <= h < 0.18:  # Orange/Red-Yellow -> Yellow
-                    return (255, 255, 0)
-                elif 0.18 <= h < 0.42:  # Yellow/Green -> Yellow or Green
-                    # Closer to yellow if h < 0.25, else green
-                    return (255, 255, 0) if h < 0.25 else (0, 128, 0)
-                elif 0.42 <= h < 0.58:  # Green/Cyan -> Green
-                    return (0, 128, 0)
-                elif 0.58 <= h < 0.75:  # Cyan/Blue -> Blue
-                    return (0, 0, 255)
-                elif 0.75 <= h < 0.95:  # Blue/Magenta -> Blue or Red
-                    # Closer to blue if h < 0.83, else red
-                    return (0, 0, 255) if h < 0.83 else (255, 0, 0)
-                else:
-                    # Default to black
-                    return (0, 0, 0)
+            # Convert back to RGB for display
+            final_image = quantized_image.convert('RGB')
 
-            # Process image pixels with smart color quantization
-            pixels = background.load()
-            for y in range(background.height):
-                for x in range(background.width):
-                    r, g, b = pixels[x, y]
-                    # Use smart HSL-based quantization
-                    quantized = smart_quantize_to_color(r, g, b)
-                    pixels[x, y] = quantized
-
-            logger.info(f"Image optimized for E Ink Spectra 6 (HSL-based quantization): {background.size}")
-            return background
+            logger.info(f"Image optimized for E Ink Spectra 6 (Floyd-Steinberg dithered): {final_image.size}")
+            return final_image
             
         except Exception as e:
             logger.error(f"Error optimizing image: {e}")
@@ -313,12 +297,14 @@ class DisplayManager:
     
     def display_image(self, image_path: str) -> bool:
         """
-        Display an image on the e-ink screen.
+        Display an image on the E Ink Spectra 6 display.
 
         Process:
-        1. Optimize image for E Ink Spectra 6 (resize, center, quantize to 6 colors)
+        1. Optimize image for Spectra 6 (resize, center, Floyd-Steinberg dithering)
         2. Convert to buffer format using epd.getbuffer()
         3. Display buffer on screen using epd.display()
+
+        Note: Full color display takes 30-40 seconds on Raspberry Pi Zero.
         """
         try:
             if not self.is_initialized:
@@ -328,27 +314,22 @@ class DisplayManager:
 
             logger.info(f"Processing image: {image_path}")
 
-            # Optimize image for E Ink Spectra 6
+            # Optimize image for E Ink Spectra 6 with Floyd-Steinberg dithering
             optimized_image = self.optimize_image_for_eink(image_path)
             if not optimized_image:
                 logger.error("Failed to optimize image for display")
                 return False
 
             logger.info(f"Image optimized, size: {optimized_image.size}, mode: {optimized_image.mode}")
+            logger.info("Converting to display buffer (this may take 30-40 seconds)...")
 
-            # Convert to display buffer format
-            # The Waveshare getbuffer() method handles the color-to-buffer conversion
-            if hasattr(self.epd, 'getbuffer'):
-                logger.info("Using epd.getbuffer() for buffer conversion")
-                buffer = self.epd.getbuffer(optimized_image)
-                self.epd.display(buffer)
-                logger.info("Image displayed successfully via getbuffer()")
-            else:
-                # Fallback for mock display
-                logger.info("Direct display (mock mode or legacy library)")
-                self.epd.display(optimized_image)
+            # Use official Waveshare method: getbuffer() + display()
+            buffer = self.epd.getbuffer(optimized_image)
+            logger.info("Buffer created, sending to display...")
 
+            self.epd.display(buffer)
             logger.info(f"Successfully displayed image: {image_path}")
+
             return True
 
         except Exception as e:
