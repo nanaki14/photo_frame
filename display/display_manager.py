@@ -388,6 +388,14 @@ class DisplayManager:
             quantized_image.save("/tmp/06_quantized_indexed.png")
             logger.info("Saved diagnostic: /tmp/06_quantized_indexed.png")
 
+            # CRITICAL: Log pixel colors to verify color information is preserved
+            sample_pixels = [
+                final_image.getpixel((10, 10)),
+                final_image.getpixel((100, 100)),
+                final_image.getpixel((400, 240)),
+            ]
+            logger.info(f"Final image pixel samples: {sample_pixels}")
+
             logger.info(f"Image optimized for E Ink Spectra 6: size={final_image.size}, mode={final_image.mode}")
             logger.info("Color enhancement complete: aggressive saturation (2.5x), contrast (1.8x), Floyd-Steinberg dithering")
             return final_image
@@ -427,6 +435,11 @@ class DisplayManager:
                 return False
 
             logger.info(f"Image ready for display: size={optimized_image.size}, mode={optimized_image.mode}")
+
+            # CRITICAL: Log pixel values before getbuffer()
+            sample_pixel = optimized_image.getpixel((10, 10))
+            logger.info(f"BEFORE getbuffer() - Sample pixel at (10,10): {sample_pixel}")
+
             logger.info("Displaying image (this may take 30-40 seconds on Raspberry Pi Zero)...")
 
             # Record start time for performance monitoring
@@ -434,7 +447,11 @@ class DisplayManager:
 
             # Use official Waveshare method: getbuffer() + display()
             # getbuffer() converts the RGB image to the display's internal buffer format
+            # CRITICAL: This is where color loss might happen if getbuffer() does its own quantization
+            logger.info("Calling epd.getbuffer() - this may perform additional color reduction")
             buffer = self.epd.getbuffer(optimized_image)
+            logger.info(f"Buffer created: size={len(buffer)} bytes")
+
             self.epd.display(buffer)
 
             # Record display time
